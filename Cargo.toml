@@ -1,0 +1,30 @@
+[package]
+name = "reai-dyj-sdk"
+version = "0.1.6"
+edition = "2021"
+rust-version = "1.93"
+description = "点一机 1 代对外接入 SDK（Rust client，经 BLE 连接设备）"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+btleplug = "0.12"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+futures = "0.3"
+uuid = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+# AP 快传 HTTP 客户端（wifi.md §5）：默认特性关掉 native-tls 减体积，rustls 即可
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+md5 = "0.7"
+sha2 = "0.10"
+
+[build-dependencies]
+cc = "1"
+
+[[bin]]
+name = "dyj_cli"
+path = "src/bin/dyj_cli.rs"
+
