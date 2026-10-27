@@ -56,7 +56,7 @@ pub async fn scan(
             rssi: props.rssi.unwrap_or(i16::MIN),
         });
     }
-    out.sort_by(|a, b| b.rssi.cmp(&a.rssi));
+    out.sort_by_key(|d| std::cmp::Reverse(d.rssi));
     Ok(out)
 }
 

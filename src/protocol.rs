@@ -55,15 +55,11 @@ impl Frame {
 
     /// 解析单个已去定界符的帧文本；非法返回 None（调用方丢弃并计数）。
     pub fn decode(line: &str) -> Option<Frame> {
-        let (prefix, rest) = if let Some(r) = line.strip_prefix("CMD:") {
-            ("CMD", r)
-        } else if let Some(r) = line.strip_prefix("RSP:") {
-            ("RSP", r)
-        } else if let Some(r) = line.strip_prefix("EVT:") {
-            ("EVT", r)
-        } else {
-            return None;
-        };
+        let (prefix, rest) = line
+            .strip_prefix("CMD:")
+            .map(|r| ("CMD", r))
+            .or_else(|| line.strip_prefix("RSP:").map(|r| ("RSP", r)))
+            .or_else(|| line.strip_prefix("EVT:").map(|r| ("EVT", r)))?;
         let v: Value = serde_json::from_str(rest).ok()?;
         match prefix {
             "CMD" => Some(Frame::Request {
