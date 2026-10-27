@@ -65,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let total = scan["total"].as_u64().unwrap_or(0);
     println!(
         "[2] scan: {total} 网络，{:?}（前3）",
-        &scan["items"]
+        scan["items"]
             .as_array()
             .map(|a| a
                 .iter()
