@@ -4,7 +4,7 @@
 
 > **协议契约**：本 SDK 是协议 `proto_version=1` 的参考实现；帧格式、命令表、错误码、超时表、AP 附属 HTTP 端点的单一事实源是 [PROTOCOL.md](PROTOCOL.md)。
 > **版本配套**：SDK 0.1.6 ↔ 设备固件 app 0.8.7。各版本配套固件与真机验证状态见 [CHANGELOG.md](CHANGELOG.md)。
-> 设备固件（Android 系统应用）不开源；本仓库为 SDK 的发布位。
+> 设备固件（Android 系统应用，不开源）所在仓库经 **git submodule** 引用本仓库（`sdk/` 路径）——本仓库是 SDK 的唯一源码仓库。
 
 ## 安装
 
