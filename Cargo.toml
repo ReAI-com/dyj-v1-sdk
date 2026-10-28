@@ -5,6 +5,10 @@ edition = "2021"
 rust-version = "1.93"
 description = "点一机 1 代对外接入 SDK（Rust client，经 BLE 连接设备）"
 license = "MIT"
+repository = "https://github.com/ReAI-com/dyj-v1-sdk"
+readme = "README.md"
+keywords = ["ble", "bluetooth", "android", "iot", "sdk"]
+categories = ["hardware-support"]
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
