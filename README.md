@@ -10,17 +10,23 @@
 
 ```toml
 [dependencies]
+reai-dyj-sdk = "0.1.6"
+```
+
+或跟踪仓库最新（git 依赖）：
+
+```toml
 reai-dyj-sdk = { git = "https://github.com/ReAI-com/dyj-v1-sdk" }
 ```
 
-要求 Rust ≥ 1.93。BLE 走 btleplug（macOS/Windows/Linux/Android 宿主均可）；AP 文件快传走 reqwest（rustls，无 OpenSSL 依赖）；实时音频解码内置 vendor 的 opencore-amrwb（Apache-2.0，FFI 编译需 C++ 编译器）。
+要求 Rust ≥ 1.93。BLE 走 btleplug（macOS/Windows/Linux/Android 宿主均可；**Linux 编译需 libdbus-1-dev**）；AP 文件快传走 reqwest（rustls，无 OpenSSL 依赖）；实时音频解码内置 vendor 的 opencore-amrwb（Apache-2.0，FFI 编译需 C++ 编译器）。
 
 命令行工具：
 
 ```bash
-git clone https://github.com/ReAI-com/dyj-v1-sdk && cd dyj-v1-sdk
-cargo build --release
-./target/release/dyj_cli --help    # 也可 cargo install --path . --bin dyj_cli
+cargo install reai-dyj-sdk    # 安装 dyj_cli 到 ~/.cargo/bin
+# 或源码构建：
+git clone https://github.com/ReAI-com/dyj-v1-sdk && cd dyj-v1-sdk && cargo build --release
 ```
 
 ## 快速上手
