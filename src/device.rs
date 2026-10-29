@@ -438,6 +438,66 @@ impl DyjDevice {
             .await
     }
 
+    /// `camera.status` 摄像头状态（L1）。
+    /// 返回 `{available, torch, recording, photo_count, video_count}`。
+    pub async fn camera_status(&self) -> Result<Value> {
+        self.request("camera.status", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `camera.capture` 拍照（L2*，10s：camera2 open+capture 余量）。
+    /// 返回 `{name, bytes}`；文件落 `files/camera`，经 upload.start 走 WiFi 上传（BLE 不传媒体）。
+    pub async fn camera_capture(&self) -> Result<Value> {
+        self.request("camera.capture", json!({}), Duration::from_secs(10))
+            .await
+    }
+
+    /// `camera.record.start` 开始录像（L2*；纯视频不含音频；max_s 到时自动停）。
+    /// `max_s`：录像时长上限，缺省 600，上限 1800；返回 `{recording, name}`。
+    pub async fn camera_record_start(&self, max_s: Option<u64>) -> Result<Value> {
+        let params = max_s
+            .map(|s| json!({ "max_s": s }))
+            .unwrap_or_else(|| json!({}));
+        self.request("camera.record.start", params, Duration::from_secs(5))
+            .await
+    }
+
+    /// `camera.record.stop` 停止录像（L2*）。返回 `{name, bytes, duration_s}`。
+    pub async fn camera_record_stop(&self) -> Result<Value> {
+        self.request("camera.record.stop", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `camera.record.status` 录像状态（L1）。返回 `{recording, name?, elapsed_s, max_s}`。
+    pub async fn camera_record_status(&self) -> Result<Value> {
+        self.request("camera.record.status", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `camera.list` 相机文件列表（L1；indexed 流式聚合）。
+    /// 返回 `{total, items:[{name, bytes, mtime, kind:"photo"|"video"}]}`（时间升序）。
+    pub async fn camera_list(&self) -> Result<Value> {
+        self.request_idem("camera.list", json!({}), Duration::from_secs(10))
+            .await
+    }
+
+    /// `camera.delete` 删除相机文件（L2*）。返回 `{deleted, freed_bytes}`；
+    /// 白名单外/不存在报 1002，删录像中当前文件报 3001。
+    pub async fn camera_delete(&self, name: &str) -> Result<Value> {
+        self.request(
+            "camera.delete",
+            json!({ "name": name }),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
+    /// `camera.torch` 闪光灯常亮开关（L2*）。capture/record 进行中报 3001（闪光单元占用）。
+    pub async fn camera_torch(&self, on: bool) -> Result<Value> {
+        self.request("camera.torch", json!({ "on": on }), Duration::from_secs(5))
+            .await
+    }
+
     /// `wifi.scan` 扫描周围 WiFi（L1，35s：设备端含 SPRD startScan 等待；indexed 流式聚合；
     /// 幂等查询走超时重试）。
     /// 返回 `{total, items:[{ssid,bssid,rssi,security,frequency}]}`（rssi 降序、同名去重）；

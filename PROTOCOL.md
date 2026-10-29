@@ -187,6 +187,14 @@ file/upload/ota 域不新开错误码段：复用 1002 参数 / 1003 内部与�
 | `ota.install` | L2*→L3 | 5s | 触发 OTA（check→download→verify→pm install 状态机后台跑，进度见 ota.progress）。**源二选一：URL 清单（默认）或 AP 通道暂存包**（`POST /api/ota/upload` 暂存的 staged.apk 优先，见 §11）。params: `{confirm:true}` **必填**（缺 2003 需确认）。安装前置校验：清单 size/sha256 有则必比 + APK 包名必须为本应用 + APK 签名证书==当前 app（防投毒）+ versionCode 单调（<当前拒绝；== 需清单 force）；存储前置 StatFs≥size+50MB（3001）；**安装失败绝不重启进程/设备**。data: `{accepted:true}`。5s 超时理由：只受理；*规划目标 L3（授权+确认），授权机制实施后收紧 | ✅ 已实施并真机验证（2026-10-27） |
 | `ota.status` | L1 | 5s | OTA 状态。data: `{state:"idle"\|"checking"\|"downloading"\|"verifying"\|"installing"\|"failed", progress?, size?, error?}` | ✅ 已实施并真机验证（2026-10-27） |
 | `ota.config.get` / `ota.config.set` | L1 / L2* | 5s | OTA 清单 URL 查询/覆盖（三级读取，默认为部署侧静态清单 URL；改址命令保留 = 防变砖约束：地址绝不编译期写死）。set params `{url?}` 空串清覆盖 → data 同 upload.config | ✅ 已实施并真机验证（2026-10-27） |
+| `camera.status` | L1 | 5s | 摄像头状态。data: `{available, torch, recording, photo_count, video_count}`（camera 域不新开错误码段：复用 1002 参数 / 1003 内部 / 3001 域内资源互斥与存储不足——capture/record/torch 互相占用、删录像中文件；3002 已被 OTA 占用勿混用） | ✅ 已实施（2026-10-29） |
+| `camera.capture` | L2* | 10s | 拍照落盘 `files/camera/img_YYYYMMDD-HHMMSS-SSS.jpg`（毫秒防同秒碰撞）→ `{name, bytes}`。EXIF orientation 摆正。媒体经 `upload.start` 走 WiFi 上传（BLE 链路 ~KB/s 不传媒体）；`*规划目标 L2，授权机制实施后收紧` | ✅ 已实施（2026-10-29） |
+| `camera.record.start` | L2* | 5s | 开始录像。params: `{max_s?:600(上限 1800)}`（到时自动停）→ `{recording:true, name}`（`files/camera/video_YYYYMMDD-HHMMSS-SSS.mp4`）。**纯视频不含音频**（避免与音频域 mic 占用冲突）；存储前置 StatFs≥50MB（3001）；capture/record/torch 域内互斥，占用中 3001 | ✅ 已实施（2026-10-29） |
+| `camera.record.stop` | L2* | 5s | 停止录像 → `{name, bytes, duration_s}` | ✅ 已实施（2026-10-29） |
+| `camera.record.status` | L1 | 5s | 录像状态。data: `{recording, name?, elapsed_s, max_s}` | ✅ 已实施（2026-10-29） |
+| `camera.list` | L1 | 10s | 相机文件列表（files/camera）。**indexed 流式响应（§3.3，record.list 同款）**：一条 entry 一帧 `{index, more:true, entry:{name, bytes, mtime, kind:"photo"\|"video"}}`，收尾帧 `{more:false,total}`；按名内时间戳升序（跨类型字典序 ≠ 时间序）。SDK `camera_list()` 自动聚合 `{total, items}` | ✅ 已实施（2026-10-29） |
+| `camera.delete` | L2* | 5s | 删除相机文件。params: `{name}` → `{deleted:true, freed_bytes}`；白名单外/不存在 1002；删录像中当前文件 3001 | ✅ 已实施（2026-10-29） |
+| `camera.torch` | L2* | 5s | 闪光灯常亮开关（setTorchMode）。params: `{on:bool}` → `{torch:bool}`；capture/record 进行中 3001（闪光单元占用）；`*规划目标 L2，授权机制实施后收紧` | ✅ 已实施（2026-10-29） |
 | *(其余随实施登记)* | | | | |
 
 ### 9.2 事件（待实施填充）

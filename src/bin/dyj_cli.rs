@@ -14,6 +14,14 @@
 //!   dyj_cli button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]
 //!   dyj_cli record list [设备名]             录音分段列表（indexed 聚合）
 //!   dyj_cli record delete <name> [设备名]    删除录音分段
+//!   dyj_cli camera status [设备名]           摄像头状态（torch/recording/计数）
+//!   dyj_cli camera capture [设备名]          拍照（落 files/camera，经 upload 上传）
+//!   dyj_cli camera record start [max_s] [设备名]   开始录像（缺省 600s 上限）
+//!   dyj_cli camera record stop [设备名]      停止录像
+//!   dyj_cli camera record status [设备名]    录像状态
+//!   dyj_cli camera list [设备名]             相机文件列表（indexed 聚合）
+//!   dyj_cli camera delete <name> [设备名]    删除相机文件
+//!   dyj_cli camera torch <on|off> [设备名]   闪光灯常亮开关
 //!   dyj_cli upload status [设备名]           上传状态
 //!   dyj_cli upload config [设备名]           上传 endpoint 配置（三级读取）
 //!   dyj_cli upload set <url> [token] [设备名]  覆盖上传 endpoint（空串清覆盖）
@@ -202,6 +210,99 @@ async fn main() {
                 }
                 other => {
                     eprintln!("未知 record 子命令: {other}（list/delete）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "camera" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("status");
+            match sub {
+                "status" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.camera_status().await }).await
+                }
+                "capture" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.camera_capture().await }).await
+                }
+                "list" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.camera_list().await }).await
+                }
+                "delete" => {
+                    let del_name = args.get(2).cloned().unwrap_or_default();
+                    if del_name.is_empty() {
+                        eprintln!("ERROR: 用法 dyj_cli camera delete <name> [设备名]");
+                        std::process::exit(2);
+                    }
+                    let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, move |device| async move {
+                        device.camera_delete(&del_name).await
+                    })
+                    .await
+                }
+                "torch" => {
+                    let on = match args.get(2).map(|s| s.as_str()) {
+                        Some("on") => true,
+                        Some("off") => false,
+                        _ => {
+                            eprintln!("ERROR: 用法 dyj_cli camera torch <on|off> [设备名]");
+                            std::process::exit(2);
+                        }
+                    };
+                    let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(
+                        name,
+                        move |device| async move { device.camera_torch(on).await },
+                    )
+                    .await
+                }
+                "record" => {
+                    let rsub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
+                    match rsub {
+                        "start" => {
+                            // record start [max_s] [设备名]：第二参为数字则视为 max_s
+                            let arg2 = args.get(3).cloned();
+                            let (max_s, name) =
+                                match arg2.as_deref().and_then(|s| s.parse::<u64>().ok()) {
+                                    Some(s) => (
+                                        Some(s),
+                                        args.get(4)
+                                            .cloned()
+                                            .unwrap_or_else(|| DEFAULT_DEVICE.into()),
+                                    ),
+                                    None => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
+                                };
+                            with_device(&name, move |device| async move {
+                                device.camera_record_start(max_s).await
+                            })
+                            .await
+                        }
+                        "stop" => {
+                            let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                            with_device(
+                                name,
+                                |device| async move { device.camera_record_stop().await },
+                            )
+                            .await
+                        }
+                        "status" => {
+                            let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                            with_device(name, |device| async move {
+                                device.camera_record_status().await
+                            })
+                            .await
+                        }
+                        other => {
+                            eprintln!("未知 camera record 子命令: {other}（start/stop/status）");
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                other => {
+                    eprintln!(
+                        "未知 camera 子命令: {other}（status/capture/list/delete/torch/record）"
+                    );
                     std::process::exit(2);
                 }
             }

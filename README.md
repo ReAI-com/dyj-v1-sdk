@@ -3,14 +3,14 @@
 点一机 1 代（DianYiJi V1）对外接入 SDK：Rust async client，跑在宿主侧（macOS / Linux / Windows 桌面），经 **BLE（GATT Central）** 连接点一机 1 代设备，把硬件能力——设备信息、WiFi 配网、录音与实时音频、LED、物理按键、录音上传、OTA 升级、AP 热点文件快传——以类型化 API 提供给外部开发者。自带全 API 覆盖的命令行工具 `dyj_cli`。
 
 > **协议契约**：本 SDK 是协议 `proto_version=1` 的参考实现；帧格式、命令表、错误码、超时表、AP 附属 HTTP 端点的单一事实源是 [PROTOCOL.md](PROTOCOL.md)。
-> **版本配套**：SDK 0.1.6 ↔ 设备固件 app 0.8.7。各版本配套固件与真机验证状态见 [CHANGELOG.md](CHANGELOG.md)。
+> **版本配套**：SDK 0.1.7 ↔ 设备固件 app 0.8.8。各版本配套固件与真机验证状态见 [CHANGELOG.md](CHANGELOG.md)。
 > 设备固件（Android 系统应用，不开源）所在仓库经 **git submodule** 引用本仓库（`sdk/` 路径）——本仓库是 SDK 的唯一源码仓库。
 
 ## 安装
 
 ```toml
 [dependencies]
-reai-dyj-sdk = "0.1.6"
+reai-dyj-sdk = "0.1.7"
 ```
 
 或跟踪仓库最新（git 依赖）：
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ```
 
 完整可跑示例见 `examples/`（均单连接、带超时，可直接作为验收脚本）：
-`wifi_sta.rs`（配网全流程）、`wifi_ap.rs`（AP 快传）、`led_check.rs`、`button_test.rs`、`dual_tap.rs`、`upload_test.rs`（上传全链路）、`ota_test.rs`（OTA 全链路）。
+`wifi_sta.rs`（配网全流程）、`wifi_ap.rs`（AP 快传）、`led_check.rs`、`button_test.rs`、`dual_tap.rs`、`upload_test.rs`（上传全链路）、`ota_test.rs`（OTA 全链路）、`camera_test.rs`（相机全链路）。
 
 ## API 面
 
