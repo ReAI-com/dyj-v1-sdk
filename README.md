@@ -69,6 +69,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 完整可跑示例见 `examples/`（均单连接、带超时，可直接作为验收脚本）：
 `wifi_sta.rs`（配网全流程）、`wifi_ap.rs`（AP 快传）、`led_check.rs`、`button_test.rs`、`dual_tap.rs`、`upload_test.rs`（上传全链路）、`ota_test.rs`（OTA 全链路）、`camera_test.rs`（相机全链路）。
 
+### 自部署媒体服务器
+
+`examples/media_server.rs` 是与设备上传域、SDK `ServerClient` 同契约的单文件服务器
+（上传 / 列表 / 下载 + sha256 回执 + 16MB 上限 + 可选 Bearer 鉴权），零外部依赖即可
+私有部署联调：
+
+```bash
+cargo run --release --example media_server -- 8900 ./dyj-media
+# 设备侧指向它：   dyj_cli upload set http://<本机IP>:8900/api/upload
+# 客户端侧对账：   dyj_cli server files http://<本机IP>:8900 <deviceId>
+```
+
+### 远端服务器客户端
+
+设备把录音/相机媒体经 WiFi 上传到服务器（成功删源）后，`ServerClient` 负责**远端侧**
+的对账与回拉（纯 HTTP，与 BLE 连接无关）：
+
+```rust
+use reai_dyj_sdk::ServerClient;
+
+let server = ServerClient::new("https://your-server.example.com")?;
+let list = server.list_files(&device_id).await?;          // {files:[{name,size,modified}]}
+server.download_to_dir(&device_id, "./archive", None).await?;  // 全量回拉
+```
+
 ## API 面
 
 入口：`DeviceManager`（扫描/连接）→ `DyjDevice`（能力 API）。方法名即协议命令名（`device.info` → `device_info()`），响应为协议 `data` 原样 JSON；列表/大响应的 indexed 分片（PROTOCOL.md §3.3）已在 SDK 内聚合成完整结构。
@@ -86,6 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 按键 | `button_status()` `button_bind_get()` `button_bind_set(gesture, action)` | 手势→动作绑定表持久化 |
 | WiFi | `wifi_scan()` `wifi_connect(ssid, password, bssid)` `wifi_status()` `wifi_forget(ssid)` | 扫描结果 rssi 降序去重 |
 | AP 快传 | `ap_start/stop/status()` + `ApClient::list_files / download_to_dir / upload_ota` | HTTP 文件服务 + OTA 包上传（端点见 PROTOCOL.md §11） |
+| 相机 | `camera_status()` `camera_capture()` `camera_record_start/stop/status()` `camera_list()` `camera_delete(name)` | 拍照/纯视频录像，媒体经上传域走 WiFi |
+| 远端服务器 | `ServerClient::new(origin)` → `list_files / download_file_to / download_to_dir` | 已上传媒体对账/回拉（见自部署媒体服务器） |
 | 事件 | `subscribe_events()` | `DeviceEvent` 单一枚举，未知事件 `Unhandled` 兜底 |
 | 通用 | `request(cmd, params, timeout)` | 未封装命令的透传出口 |
 
@@ -104,6 +131,8 @@ dyj_cli led status|set|clear
 dyj_cli button status|bind|set
 dyj_cli record list|delete
 dyj_cli upload status|config|set|start
+dyj_cli camera status|capture|list|delete|record start/stop/status
+dyj_cli server files|pull <origin> <deviceId>   # 远端已上传文件对账/回拉（不走 BLE）
 dyj_cli ota check|install|status|config|set
 dyj_cli audio [秒] [输出.wav]          # 实时音频录 wav
 dyj_cli send <cmd> <params-json>      # 任意命令透传

@@ -6,12 +6,14 @@
 //! - [`device`]: 高层设备 API（`DeviceManager` → `DyjDevice`）
 //! - [`audio`]: 实时音频（ADPCM 解码 / PCM 块 / WAV 导出）
 //! - [`access_point`]: AP 快传 HTTP 客户端（热点模式文件服务）
+//! - [`server`]: 远端上传服务器客户端（已上传文件列表/回拉，与 BLE 无关）
 
 pub mod access_point;
 pub mod audio;
 pub mod device;
 pub mod error;
 pub mod protocol;
+pub mod server;
 pub mod transport;
 
 pub use access_point::{ApClient, ApFileEntry, ApFileList, SavedDownload};
@@ -19,3 +21,4 @@ pub use audio::{AmrWbDecoder, PcmChunk};
 pub use device::{DeviceEvent, DeviceManager, DyjDevice, RealtimeAudioSession};
 pub use error::SdkError;
 pub use protocol::{Frame, ProtocolInfo};
+pub use server::{SavedServerFile, ServerClient, ServerFileEntry, ServerFileList};

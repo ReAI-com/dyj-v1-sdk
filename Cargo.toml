@@ -32,3 +32,8 @@ cc = "1"
 name = "dyj_cli"
 path = "src/bin/dyj_cli.rs"
 
+
+# 媒体服务器示例（examples/media_server.rs）专用：不进发布产物依赖图
+[dev-dependencies]
+axum = "0.8"
+bytes = "1"

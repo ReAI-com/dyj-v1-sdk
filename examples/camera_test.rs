@@ -1,5 +1,5 @@
 //! 相机能力域验收（协议 §9.1 camera.*）：**单连接内**完成状态查询 → 拍照 → 列表 →
-//! 删除（可选保留）→ 闪光灯开/关 → 录像 start/status/stop → 列表汇总 → 断连。
+//! 删除（可选保留）→ 录像 start/status/stop → 列表汇总 → 断连。
 //!
 //! 用法: cargo run -p reai-dyj-sdk --example camera_test -- [设备名] [keep_name|"-"]
 //! 例：`camera_test DYJ_RA6BO5 -`                  全流程跑完并把产物删干净
@@ -35,11 +35,6 @@ async fn main() -> Result<(), SdkError> {
             device.camera_delete(&shot_name).await?
         );
     }
-
-    // ---- 闪光灯 ----
-    println!("[camera.torch on] {}", device.camera_torch(true).await?);
-    std::thread::sleep(std::time::Duration::from_secs(1));
-    println!("[camera.torch off] {}", device.camera_torch(false).await?);
 
     // ---- 短录像（10s 上限，实际 3s 停） ----
     let rec = device.camera_record_start(Some(10)).await?;

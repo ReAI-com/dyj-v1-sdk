@@ -21,7 +21,6 @@
 //!   dyj_cli camera record status [设备名]    录像状态
 //!   dyj_cli camera list [设备名]             相机文件列表（indexed 聚合）
 //!   dyj_cli camera delete <name> [设备名]    删除相机文件
-//!   dyj_cli camera torch <on|off> [设备名]   闪光灯常亮开关
 //!   dyj_cli upload status [设备名]           上传状态
 //!   dyj_cli upload config [设备名]           上传 endpoint 配置（三级读取）
 //!   dyj_cli upload set <url> [token] [设备名]  覆盖上传 endpoint（空串清覆盖）
@@ -35,6 +34,8 @@
 //!   dyj_cli wifi connect <ssid> [password] [设备名]   连接 WiFi（缺密码=开放网络）
 //!   dyj_cli wifi status [设备名]             WiFi 状态（ssid/ip/rssi…）
 //!   dyj_cli wifi forget [ssid|-] [设备名]    删除已保存网络（"-"=全部）
+//!   dyj_cli server files <origin> <deviceId>      远端服务器已上传文件列表（不走 BLE）
+//!   dyj_cli server pull <origin> <deviceId> <目录> [name...]   远端文件回拉到本地
 //!   dyj_cli ap start [ssid] [password] [--allow-sta-drop] [设备名]   开热点
 //!   dyj_cli ap stop [设备名]                 关热点（STA 自动恢复）
 //!   dyj_cli ap status [设备名]               热点状态（ssid/ip/sta_state）
@@ -44,7 +45,7 @@
 //!
 //! 设备名默认 DYJ_RA6BO5。
 
-use reai_dyj_sdk::{DeviceManager, SdkError};
+use reai_dyj_sdk::{DeviceManager, SdkError, ServerClient};
 use std::time::Duration;
 
 const DEFAULT_DEVICE: &str = "DYJ_RA6BO5";
@@ -72,6 +73,73 @@ async fn main() {
     }
 
     let result = match args[0].as_str() {
+        // ---- 远端上传服务器（不走 BLE，独立 HTTP 客户端） ----
+        "server" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("files");
+            match sub {
+                "files" => {
+                    let (origin, device_id) = match (args.get(2), args.get(3)) {
+                        (Some(o), Some(d)) => (o.clone(), d.clone()),
+                        _ => {
+                            eprintln!("ERROR: 用法 dyj_cli server files <origin> <deviceId>");
+                            std::process::exit(2);
+                        }
+                    };
+                    let client = match ServerClient::new(&origin) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("ERROR: {e}");
+                            std::process::exit(2);
+                        }
+                    };
+                    client
+                        .list_files(&device_id)
+                        .await
+                        .map(|list| {
+                            serde_json::json!({ "files": list.files, "total": list.files.len() })
+                        })
+                }
+                "pull" => {
+                    let (origin, device_id, dir) = match (args.get(2), args.get(3), args.get(4)) {
+                        (Some(o), Some(d), Some(dir)) => (o.clone(), d.clone(), dir.clone()),
+                        _ => {
+                            eprintln!(
+                                "ERROR: 用法 dyj_cli server pull <origin> <deviceId> <目录> [name...]"
+                            );
+                            std::process::exit(2);
+                        }
+                    };
+                    let only: Vec<String> = args.iter().skip(5).cloned().collect();
+                    let only_ref = if only.is_empty() {
+                        None
+                    } else {
+                        Some(&only[..])
+                    };
+                    let client = match ServerClient::new(&origin) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("ERROR: {e}");
+                            std::process::exit(2);
+                        }
+                    };
+                    client
+                        .download_to_dir(&device_id, &dir, only_ref)
+                        .await
+                        .map(|saved| {
+                            serde_json::json!({
+                                "saved": saved.iter().map(|s| serde_json::json!({
+                                    "name": s.name, "path": s.path, "bytes": s.bytes_written,
+                                })).collect::<Vec<_>>(),
+                                "total": saved.len(),
+                            })
+                        })
+                }
+                other => {
+                    eprintln!("未知 server 子命令: {other}（files/pull）");
+                    std::process::exit(2);
+                }
+            }
+        }
         "scan" => {
             let prefix = args.get(1).map(|s| s.as_str()).unwrap_or("");
             scan(prefix)

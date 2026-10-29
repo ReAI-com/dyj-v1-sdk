@@ -6,12 +6,18 @@
 
 - **camera 域**：`camera_status` / `camera_capture`（拍照落盘 JPEG，EXIF 摆正）/
   `camera_record_start` / `camera_record_stop` / `camera_record_status`（MediaRecorder
-  纯视频，max_s 到时自动停）/ `camera_list`（indexed 流式聚合）/ `camera_delete` /
-  `camera_torch`（闪光灯常亮）。capture/record/torch 域内互斥，占用中报 3001
+  纯视频，max_s 到时自动停）/ `camera_list`（indexed 流式聚合）/ `camera_delete`。
+  capture/record 域内互斥，占用中报 3001；拍照/上传/删除/录像已真机验证
 - 设备端上传白名单放宽：`upload.start` 未传集合自动涵盖相机媒体
   （`img_*.jpg` / `video_*.mp4`），照片/视频经 WiFi 上传（BLE 链路不传媒体）
-- CLI：`camera status|capture|list|delete|torch|record start/stop/status`
-- 示例：`camera_test.rs`（拍照→列表→闪光灯→短录像→清理，单连接）
+- CLI：`camera status|capture|list|delete|record start/stop/status`
+- 示例：`camera_test.rs`（拍照→列表→短录像→清理，单连接）
+- **server 模块**：`ServerClient`（远端上传服务器客户端：`list_files` /
+  `download_file_to` / `download_to_dir`，纯 HTTP 与 BLE 无关）+ CLI
+  `server files|pull`；配套 `examples/media_server.rs` 单文件自部署媒体服务器
+  （上传/列表/下载同契约，sha256 回执 + 16MB 上限 + 可选 Bearer 鉴权）
+- 相机已真机验证（拍照/上传/删除/录像）；**camera.torch 闪光灯已移除**——真机确认
+  无闪光灯硬件（HAL FLASH_INFO_AVAILABLE=true 为虚报），该命令未进任何发布版本
 
 ## 0.1.6 — 2026-10-27（配套 app 0.8.7）
 
