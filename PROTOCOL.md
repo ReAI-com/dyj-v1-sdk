@@ -189,7 +189,7 @@ file/upload/ota 域不新开错误码段：复用 1002 参数 / 1003 内部与�
 | `ota.config.get` / `ota.config.set` | L1 / L2* | 5s | OTA 清单 URL 查询/覆盖（三级读取，默认为部署侧静态清单 URL；改址命令保留 = 防变砖约束：地址绝不编译期写死）。set params `{url?}` 空串清覆盖 → data 同 upload.config | ✅ 已实施并真机验证（2026-10-27） |
 | `camera.status` | L1 | 5s | 摄像头状态。data: `{available, recording, photo_count, video_count}`（camera 域不新开错误码段：复用 1002 参数 / 1003 内部 / 3001 域内资源互斥与存储不足——capture/record 互相占用、删录像中文件；3002 已被 OTA 占用勿混用） | ✅ 已实施并真机验证（2026-10-29，拍照/上传/删除/录像） |
 | `camera.capture` | L2* | 10s | 拍照落盘 `files/camera/img_YYYYMMDD-HHMMSS-SSS.jpg`（毫秒防同秒碰撞）→ `{name, bytes}`。EXIF orientation 摆正。媒体经 `upload.start` 走 WiFi 上传（BLE 链路 ~KB/s 不传媒体）；`*规划目标 L2，授权机制实施后收紧` | ✅ 已实施（2026-10-29） |
-| `camera.record.start` | L2* | 5s | 开始录像。params: `{max_s?:600(上限 1800)}`（到时自动停）→ `{recording:true, name}`（`files/camera/video_YYYYMMDD-HHMMSS-SSS.mp4`）。**纯视频不含音频**（避免与音频域 mic 占用冲突）；存储前置 StatFs≥50MB（3001）；capture/record 域内互斥，占用中 3001 | ✅ 已实施并真机验证（2026-10-29） |
+| `camera.record.start` | L2* | 5s | 开始录像。params: `{max_s?:600(上限 1800)}`（到时自动停）→ `{recording:true, name}`（设备公共存储 `DYJ/video_YYYYMMDD-HHMMSS-SSS.mp4`——SELinux mediaserver 策略不允许写应用私有目录）。**纯视频不含音频**；码率钳 4Mbps；存储前置 StatFs≥50MB（3001）；capture/record 域内互斥，占用中 3001 | ✅ 已实施并真机验证（2026-10-29，录像/删除全链路） |
 | `camera.record.stop` | L2* | 5s | 停止录像 → `{name, bytes, duration_s}` | ✅ 已实施（2026-10-29） |
 | `camera.record.status` | L1 | 5s | 录像状态。data: `{recording, name?, elapsed_s, max_s}` | ✅ 已实施（2026-10-29） |
 | `camera.list` | L1 | 10s | 相机文件列表（files/camera）。**indexed 流式响应（§3.3，record.list 同款）**：一条 entry 一帧 `{index, more:true, entry:{name, bytes, mtime, kind:"photo"\|"video"}}`，收尾帧 `{more:false,total}`；按名内时间戳升序（跨类型字典序 ≠ 时间序）。SDK `camera_list()` 自动聚合 `{total, items}` | ✅ 已实施（2026-10-29） |

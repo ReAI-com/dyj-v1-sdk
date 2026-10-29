@@ -6,7 +6,8 @@
 
 - **camera 域**：`camera_status` / `camera_capture`（拍照落盘 JPEG，EXIF 摆正）/
   `camera_record_start` / `camera_record_stop` / `camera_record_status`（MediaRecorder
-  纯视频，max_s 到时自动停）/ `camera_list`（indexed 流式聚合）/ `camera_delete`。
+  纯视频，max_s 到时自动停，码率钳 4Mbps，输出设备公共存储 `DYJ/` 目录——
+  SELinux mediaserver 不收应用私有目录的 fd，规格回退链逐档 prepare）/ `camera_list`（indexed 流式聚合）/ `camera_delete`。
   capture/record 域内互斥，占用中报 3001；拍照/上传/删除/录像已真机验证
 - 设备端上传白名单放宽：`upload.start` 未传集合自动涵盖相机媒体
   （`img_*.jpg` / `video_*.mp4`），照片/视频经 WiFi 上传（BLE 链路不传媒体）
