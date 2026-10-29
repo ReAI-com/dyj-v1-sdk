@@ -2,6 +2,14 @@
 
 版本与设备固件（Android 系统应用，不开源）按批配套发布：SDK 0.1.x ↔ app 0.8.x 同批落地、同批真机验证。协议契约见 [PROTOCOL.md](PROTOCOL.md)。
 
+## 0.1.8 — 2026-10-29（配套 app 0.8.9）
+
+- **录像修复配套**（SDK 接口无变化，0.1.7 全部能力继承）：
+  - 录像输出改设备公共存储 `DYJ/` 目录（SELinux mediaserver 拒应用私有目录 fd——
+    ROM 策略不可改，`setOutputFile` 路径/fd 双路被拒 prepare -38）
+  - 码率钳 4Mbps（HIGH 档原生 16Mbps 超服务器 16MB 单文件上限）；规格回退链逐档 prepare
+  - 真机全链路验证：record start/stop（17s/7MB）→ list → delete
+
 ## 0.1.7 — 2026-10-29（配套 app 0.8.8）
 
 - **camera 域**：`camera_status` / `camera_capture`（拍照落盘 JPEG，EXIF 摆正）/
