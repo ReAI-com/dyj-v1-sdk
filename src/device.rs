@@ -452,17 +452,34 @@ impl DyjDevice {
             .await
     }
 
-    /// `camera.record.start` 开始录像（L2*；纯视频不含音频；max_s 到时自动停）。
-    /// `max_s`：录像时长上限，缺省 600，上限 1800；返回 `{recording, name}`。
-    pub async fn camera_record_start(&self, max_s: Option<u64>) -> Result<Value> {
-        let params = max_s
-            .map(|s| json!({ "max_s": s }))
-            .unwrap_or_else(|| json!({}));
-        self.request("camera.record.start", params, Duration::from_secs(5))
-            .await
+    /// `camera.record.start` 开始录像（L2*；纯视频不含音频；max_s 会话到时自动停）。
+    /// `max_s`：录像会话时长上限，缺省 600，上限 1800；
+    /// `segment_s`：分段滚动时长，缺省 30（4Mbps 下稳保服务器 16MB 上传上限），
+    /// `Some(0)` = 单文件不分段（遗留语义），5..300；段命名
+    /// `video_<首段起始>_<session>_<seq>.mp4`（对齐音频会话语义，按名分组），
+    /// 滚动发 EVT `camera.segment`。返回 `{recording, name, session, segment_s}`。
+    pub async fn camera_record_start(
+        &self,
+        max_s: Option<u64>,
+        segment_s: Option<u64>,
+    ) -> Result<Value> {
+        let mut params = serde_json::Map::new();
+        if let Some(s) = max_s {
+            params.insert("max_s".into(), json!(s));
+        }
+        if let Some(seg) = segment_s {
+            params.insert("segment_s".into(), json!(seg));
+        }
+        self.request(
+            "camera.record.start",
+            Value::Object(params),
+            Duration::from_secs(5),
+        )
+        .await
     }
 
-    /// `camera.record.stop` 停止录像（L2*）。返回 `{name, bytes, duration_s}`。
+    /// `camera.record.stop` 停止录像（L2*）。
+    /// 返回 `{name, bytes, duration_s, session, files_written, bytes_written}`。
     pub async fn camera_record_stop(&self) -> Result<Value> {
         self.request("camera.record.stop", json!({}), Duration::from_secs(5))
             .await

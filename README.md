@@ -3,14 +3,14 @@
 点一机 1 代（DianYiJi V1）对外接入 SDK：Rust async client，跑在宿主侧（macOS / Linux / Windows 桌面），经 **BLE（GATT Central）** 连接点一机 1 代设备，把硬件能力——设备信息、WiFi 配网、录音与实时音频、LED、物理按键、录音上传、OTA 升级、AP 热点文件快传——以类型化 API 提供给外部开发者。自带全 API 覆盖的命令行工具 `dyj_cli`。
 
 > **协议契约**：本 SDK 是协议 `proto_version=1` 的参考实现；帧格式、命令表、错误码、超时表、AP 附属 HTTP 端点的单一事实源是 [PROTOCOL.md](PROTOCOL.md)。
-> **版本配套**：SDK 0.1.11 ↔ 设备固件 app 0.8.11。各版本配套固件与真机验证状态见 [CHANGELOG.md](CHANGELOG.md)。
+> **版本配套**：SDK 0.1.12 ↔ 设备固件 app 0.8.12。各版本配套固件与真机验证状态见 [CHANGELOG.md](CHANGELOG.md)。
 > 设备固件（Android 系统应用，不开源）所在仓库经 **git submodule** 引用本仓库（`sdk/` 路径）——本仓库是 SDK 的唯一源码仓库。
 
 ## 安装
 
 ```toml
 [dependencies]
-reai-dyj-sdk = "0.1.11"
+reai-dyj-sdk = "0.1.12"
 ```
 
 或跟踪仓库最新（git 依赖）：
@@ -111,7 +111,7 @@ server.download_to_dir(&device_id, "./archive", None).await?;  // 全量回拉
 | 按键 | `button_status()` `button_bind_get()` `button_bind_set(gesture, action)` | 手势→动作绑定表持久化 |
 | WiFi | `wifi_scan()` `wifi_connect(ssid, password, bssid)` `wifi_status()` `wifi_forget(ssid)` | 扫描结果 rssi 降序去重 |
 | AP 快传 | `ap_start/stop/status()` + `ApClient::list_files / download_to_dir / upload_ota` | HTTP 文件服务 + OTA 包上传（端点见 PROTOCOL.md §11） |
-| 相机 | `camera_status()` `camera_capture()` `camera_record_start/stop/status()` `camera_list()` `camera_delete(name)` | 拍照/纯视频录像，媒体经上传域走 WiFi |
+| 相机 | `camera_status()` `camera_capture()` `camera_record_start/stop/status()` `camera_list()` `camera_delete(name)` | 拍照/纯视频录像（**分段**：`segment_s` 缺省 30s 稳保 16MB 上传，`camera.segment` 事件，按 session 名分组），媒体经上传域走 WiFi |
 | 传感器 | `sensor_status()` `sensor_read(types)` `sensor_stream_start/stop()` | 5 类实读（磁力/方向/气压/计步/旋矢）+ 500ms 下限节流订阅（EVT `sensor.data`） |
 | 定位 | `location_status()` `location_get(timeout_s)` `location_stream_start/stop()` | GNSS 一次取位（无 fix 正常返回）+ 订阅（EVT `location.fix`）；设备端自动开定位模式 |
 | 系统控制 | `vibrator_once/cancel()` `volume_get/set()` `device_time(epoch_ms)` `device_reboot(confirm)` | 震动（时长+强度）/ 三流音量 / 对时 / 重启（全协议唯一 L3，断连属预期） |

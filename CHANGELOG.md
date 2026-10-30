@@ -2,6 +2,17 @@
 
 版本与设备固件（Android 系统应用，不开源）按批配套发布：SDK 0.1.x ↔ app 0.8.x 同批落地、同批真机验证。协议契约见 [PROTOCOL.md](PROTOCOL.md)。
 
+## 0.1.12 — 2026-10-30（配套 app 0.8.12）
+
+- **camera.record 分段**（issue #8）：`camera_record_start` 新增 `segment_s`
+  参数（缺省 30s = 4Mbps 下稳保服务器 16MB 单文件上传上限；`Some(0)` 单文件
+  不分段；5..300）；段命名 `video_<首段起始>_<session>_<seq>.mp4` 对齐音频
+  会话语义，服务端/SDK 按名分组零改动；滚动发 EVT `camera.segment`
+  （`{file, bytes, session, seq}`）；`camera_record_stop` 返回会话汇总
+  （`session` / `files_written` / `bytes_written`）；`camera_list` entry 带可选
+  session/seq。**注意**：`camera_record_start` 签名变更（新增第二参数）
+- CLI：`camera record start [max_s] [segment_s] [设备名]`
+
 ## 0.1.11 — 2026-10-30（配套 app 0.8.11）
 
 - **系统控制域**（批 3）：`vibrator_once` / `vibrator_cancel`（VibrationEffect 一次性震动，

@@ -37,7 +37,7 @@ async fn main() -> Result<(), SdkError> {
     }
 
     // ---- 短录像（10s 上限，实际 3s 停） ----
-    let rec = device.camera_record_start(Some(10)).await?;
+    let rec = device.camera_record_start(Some(10), None).await?;
     println!("[camera.record.start] {rec}");
     std::thread::sleep(std::time::Duration::from_secs(3));
     println!(

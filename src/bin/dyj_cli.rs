@@ -16,7 +16,7 @@
 //!   dyj_cli record delete <name> [设备名]    删除录音分段
 //!   dyj_cli camera status [设备名]           摄像头状态（recording/计数）
 //!   dyj_cli camera capture [设备名]          拍照（落 files/camera，经 upload 上传）
-//!   dyj_cli camera record start [max_s] [设备名]   开始录像（缺省 600s 上限）
+//!   dyj_cli camera record start [max_s] [segment_s] [设备名]   开始录像（缺省 600s 上限 / 30s 分段）
 //!   dyj_cli camera record stop [设备名]      停止录像
 //!   dyj_cli camera record status [设备名]    录像状态
 //!   dyj_cli camera list [设备名]             相机文件列表（indexed 聚合）
@@ -81,7 +81,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!(
-            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|sensor|location|vibrator|volume|device> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
+            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|sensor|location|vibrator|volume|device> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
         );
         std::process::exit(2);
     }
@@ -333,20 +333,25 @@ async fn main() {
                     let rsub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
                     match rsub {
                         "start" => {
-                            // record start [max_s] [设备名]：第二参为数字则视为 max_s
-                            let arg2 = args.get(3).cloned();
-                            let (max_s, name) =
-                                match arg2.as_deref().and_then(|s| s.parse::<u64>().ok()) {
-                                    Some(s) => (
-                                        Some(s),
-                                        args.get(4)
-                                            .cloned()
-                                            .unwrap_or_else(|| DEFAULT_DEVICE.into()),
-                                    ),
-                                    None => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
-                                };
+                            // record start [max_s] [segment_s] [设备名]：数字参数依次为 max_s / segment_s
+                            let mut nums: [Option<u64>; 2] = [None, None];
+                            let mut name_idx = 3;
+                            for n in &mut nums {
+                                match args.get(name_idx).and_then(|s| s.parse::<u64>().ok()) {
+                                    Some(v) => {
+                                        *n = Some(v);
+                                        name_idx += 1;
+                                    }
+                                    None => break,
+                                }
+                            }
+                            let name = args
+                                .get(name_idx)
+                                .cloned()
+                                .unwrap_or_else(|| DEFAULT_DEVICE.into());
+                            let [max_s, seg_s] = nums;
                             with_device(&name, move |device| async move {
-                                device.camera_record_start(max_s).await
+                                device.camera_record_start(max_s, seg_s).await
                             })
                             .await
                         }
@@ -402,8 +407,8 @@ async fn main() {
                         ),
                         Some(_) => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
                     };
-                    with_device(&name, move |device| {
-                        async move { device.sensor_read(types.as_deref()).await }
+                    with_device(&name, move |device| async move {
+                        device.sensor_read(types.as_deref()).await
                     })
                     .await
                 }
