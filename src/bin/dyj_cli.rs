@@ -186,7 +186,9 @@ async fn main() {
             };
             let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
             with_device(name, move |device| async move {
-                device.request(&cmd, params, Duration::from_secs(10)).await
+                device
+                    .request(&cmd, params, reai_dyj_sdk::passthrough_timeout(&cmd))
+                    .await
             })
             .await
         }

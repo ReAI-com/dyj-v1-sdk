@@ -925,6 +925,26 @@ impl Drop for RealtimeAudioSession {
     }
 }
 
+/// 透传命令的客户端超时表（design.md §9 登记超时 + 客户端余量；规则 §7：客户端
+/// 必须 ≥ 设备端最长执行时间，否则客户端先放弃会**丢掉正常业务响应**——
+/// 2026-10-30 实证：location.get 设备端等 GPS 最长 30s，console/CLI 统一 10s
+/// 提前掐断，`has_fix:false` 永远到不了调用方）。typed 方法内已按各命令登记
+/// 超时传参，不受此表影响。
+pub fn passthrough_timeout(cmd: &str) -> Duration {
+    match cmd {
+        // 设备端 30s（location.get：timeout_s 参数上限 25 + 执行余量）
+        "location.get" => Duration::from_secs(32),
+        // 设备端 35s（SPRD 扫描等待 / 连接同步 / AP 启动）
+        "wifi.scan" | "wifi.connect" | "ap.start" => Duration::from_secs(37),
+        // 设备端 10s（camera2 采集 / 列表聚合 / 外网 HTTPS）
+        "camera.capture" | "camera.list" | "record.list" | "led.status" | "ota.check" => {
+            Duration::from_secs(12)
+        }
+        // 其余设备端 ≤5s，协议默认 10s 足够
+        _ => Duration::from_secs(10),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2,6 +2,14 @@
 
 版本与设备固件（Android 系统应用，不开源）按批配套发布：SDK 0.1.x ↔ app 0.8.x 同批落地、同批真机验证。协议契约见 [PROTOCOL.md](PROTOCOL.md)。
 
+## 0.1.10 — 2026-10-30（配套 app 0.8.10，SDK 侧修复）
+
+- **透传超时表 `passthrough_timeout(cmd)`**（新公开 API）：`send` 透传/自建通道的客户端
+  超时必须 ≥ 设备端登记超时（§7）——`location.get` 设备端等 GPS 最长 30s，此前 CLI
+  `send` 与 console `/api/command` 统一 10s 提前掐断，正常业务响应 `has_fix:false`
+  被丢（10s 处超时而非 15-30s 处返回）。typed 方法不受影响；长命令分档
+  location.get 32s / wifi.scan·connect·ap.start 37s / 10s 级 12s / 默认 10s
+
 ## 0.1.9 — 2026-10-30（配套 app 0.8.10）
 
 - **sensor 域**（真机 HAL 实注册 5 类）：`sensor_status` / `sensor_read`（单次实读，

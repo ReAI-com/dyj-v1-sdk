@@ -18,7 +18,9 @@ pub mod transport;
 
 pub use access_point::{ApClient, ApFileEntry, ApFileList, SavedDownload};
 pub use audio::{AmrWbDecoder, PcmChunk};
-pub use device::{DeviceEvent, DeviceManager, DyjDevice, RealtimeAudioSession};
+pub use device::{
+    passthrough_timeout, DeviceEvent, DeviceManager, DyjDevice, RealtimeAudioSession,
+};
 pub use error::SdkError;
 pub use protocol::{Frame, ProtocolInfo};
 pub use server::{SavedServerFile, ServerClient, ServerFileEntry, ServerFileList};
