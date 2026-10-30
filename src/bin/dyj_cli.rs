@@ -29,6 +29,12 @@
 //!   dyj_cli location get [timeout_s] [设备名]   取一次定位（无 fix 正常返回 has_fix:false）
 //!   dyj_cli location stream start [min_interval_s] [设备名]   开订阅（EVT location.fix）
 //!   dyj_cli location stream stop [设备名]    停订阅
+//!   dyj_cli vibrator once [duration_ms] [amplitude] [设备名]   震动一次（缺省 200ms 默认强度）
+//!   dyj_cli vibrator cancel [设备名]         取消当前震动
+//!   dyj_cli volume get [设备名]              三流音量查询
+//!   dyj_cli volume set <music|ring|system> <value> [设备名]   设音量（回读生效值）
+//!   dyj_cli device time [epoch_ms] [设备名]  回读时钟 / 对时（联网自动对时会覆盖）
+//!   dyj_cli device reboot [设备名]           重启（自动带 confirm；断连属预期，60s 内重连）
 //!   dyj_cli upload status [设备名]           上传状态
 //!   dyj_cli upload config [设备名]           上传 endpoint 配置（三级读取）
 //!   dyj_cli upload set <url> [token] [设备名]  覆盖上传 endpoint（空串清覆盖）
@@ -75,7 +81,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!(
-            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|sensor|location> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
+            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|sensor|location|vibrator|volume|device> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
         );
         std::process::exit(2);
     }
@@ -397,8 +403,7 @@ async fn main() {
                         Some(_) => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
                     };
                     with_device(&name, move |device| {
-                        let ts = types.map(|v| v.iter().copied().collect::<Vec<_>>());
-                        async move { device.sensor_read(ts.as_deref()).await }
+                        async move { device.sensor_read(types.as_deref()).await }
                     })
                     .await
                 }
@@ -504,6 +509,109 @@ async fn main() {
                 }
                 other => {
                     eprintln!("未知 location 子命令: {other}（status/get/stream）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "vibrator" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("once");
+            match sub {
+                "once" => {
+                    // once [duration_ms] [amplitude] [设备名]
+                    let mut nums: [Option<u64>; 2] = [None, None];
+                    let mut name_idx = 2;
+                    for n in &mut nums {
+                        match args.get(name_idx).and_then(|s| s.parse::<u64>().ok()) {
+                            Some(v) => {
+                                *n = Some(v);
+                                name_idx += 1;
+                            }
+                            None => break,
+                        }
+                    }
+                    let name = args
+                        .get(name_idx)
+                        .cloned()
+                        .unwrap_or_else(|| DEFAULT_DEVICE.into());
+                    let (d, amp) = (nums[0], nums[1].and_then(|v| u8::try_from(v).ok()));
+                    with_device(&name, move |device| async move {
+                        device.vibrator_once(d, amp).await
+                    })
+                    .await
+                }
+                "cancel" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.vibrator_cancel().await }).await
+                }
+                other => {
+                    eprintln!("未知 vibrator 子命令: {other}（once/cancel）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "volume" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("get");
+            match sub {
+                "get" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.volume_get().await }).await
+                }
+                "set" => {
+                    let stream = args.get(2).cloned().unwrap_or_default();
+                    let value = args.get(3).and_then(|s| s.parse::<i64>().ok());
+                    match (stream.as_str(), value) {
+                        ("music" | "ring" | "system", Some(v)) => {
+                            let name = args.get(4).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                            with_device(name, move |device| async move {
+                                device.volume_set(&stream, v).await
+                            })
+                            .await
+                        }
+                        _ => {
+                            eprintln!("ERROR: 用法 dyj_cli volume set <music|ring|system> <value> [设备名]");
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                other => {
+                    eprintln!("未知 volume 子命令: {other}（get/set）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "device" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("time");
+            match sub {
+                "time" => {
+                    // time [epoch_ms] [设备名]：带 epoch_ms = 对时，缺省仅回读
+                    let arg2 = args.get(2).cloned();
+                    let (epoch, name) = match arg2.as_deref().and_then(|s| s.parse::<i64>().ok()) {
+                        Some(v) => (
+                            Some(v),
+                            args.get(3)
+                                .cloned()
+                                .unwrap_or_else(|| DEFAULT_DEVICE.into()),
+                        ),
+                        None => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
+                    };
+                    with_device(&name, move |device| async move {
+                        device.device_time(epoch).await
+                    })
+                    .await
+                }
+                "reboot" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    eprintln!(
+                        "!! device.reboot：设备将重启、BLE 断连属预期，60s 内重连 hello 验证"
+                    );
+                    with_device(
+                        name,
+                        |device| async move { device.device_reboot(true).await },
+                    )
+                    .await
+                }
+                other => {
+                    eprintln!("未知 device 子命令: {other}（time/reboot）");
                     std::process::exit(2);
                 }
             }

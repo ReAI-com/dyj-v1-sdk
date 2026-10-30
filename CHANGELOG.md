@@ -2,6 +2,17 @@
 
 版本与设备固件（Android 系统应用，不开源）按批配套发布：SDK 0.1.x ↔ app 0.8.x 同批落地、同批真机验证。协议契约见 [PROTOCOL.md](PROTOCOL.md)。
 
+## 0.1.11 — 2026-10-30（配套 app 0.8.11）
+
+- **系统控制域**（批 3）：`vibrator_once` / `vibrator_cancel`（VibrationEffect 一次性震动，
+  时长 1..10000ms / 强度 1..255）、`volume_get` / `volume_set`（music/ring/system 三流，
+  set 后回读生效值，越界 clamp）、`device_time`（回读 + AlarmManager 对时——联网自动对时
+  会被系统覆盖）、`device_reboot(confirm)`（**全协议唯一 L3**：缺 confirm 报 2003，accepted
+  后延迟 1s 重启，BLE 断连属预期；REBOOT 签名权限仅平台签名 sys 包持有）
+- CLI：`vibrator once|cancel`、`volume get|set`、`device time|reboot`
+- 示例：`sysctrl_test.rs`（安全路径：震动体感 / 音量回读 / 对时偏差 <1s / confirm 缺失
+  2003；真实重启单独走 `dyj_cli device reboot`）
+
 ## 0.1.10 — 2026-10-30（配套 app 0.8.10，SDK 侧修复）
 
 - **透传超时表 `passthrough_timeout(cmd)`**（新公开 API）：`send` 透传/自建通道的客户端

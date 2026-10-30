@@ -581,6 +581,75 @@ impl DyjDevice {
             .await
     }
 
+    // ==== 系统控制域（vibrator / volume / device，0.1.11 批 3，camera-sensor-system 方案 §5）====
+
+    /// `vibrator.once` 震动一次（L2*）。`duration_ms`：1..10000 缺省 200（区间外 1002）；
+    /// `amplitude`：1..255，`None` = 系统默认强度。波形 pattern（多段 on/off）为待定项。
+    pub async fn vibrator_once(
+        &self,
+        duration_ms: Option<u64>,
+        amplitude: Option<u8>,
+    ) -> Result<Value> {
+        let mut params = serde_json::Map::new();
+        if let Some(d) = duration_ms {
+            params.insert("duration_ms".into(), json!(d));
+        }
+        if let Some(a) = amplitude {
+            params.insert("amplitude".into(), json!(a));
+        }
+        self.request(
+            "vibrator.once",
+            Value::Object(params),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
+    /// `vibrator.cancel` 取消当前震动（L2*；幂等）。返回 `{cancelled:true}`。
+    pub async fn vibrator_cancel(&self) -> Result<Value> {
+        self.request("vibrator.cancel", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `volume.get` 三流音量查询（L1）。返回 `{streams:{music:{current,max}, ring, system}}`。
+    pub async fn volume_get(&self) -> Result<Value> {
+        self.request("volume.get", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `volume.set` 设置音量并回读生效值（L2*）。`stream`："music"|"ring"|"system"；
+    /// `value` 越界设备端 clamp（返回 current 即生效值）；stream 非法 1002。
+    pub async fn volume_set(&self, stream: &str, value: i64) -> Result<Value> {
+        self.request(
+            "volume.set",
+            json!({ "stream": stream, "value": value }),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
+    /// `device.time` 回读/对时（L2*）。`Some(epoch_ms)` = 对时（联网自动对时开着会被系统
+    /// 下次同步覆盖）；`None` = 仅回读。返回 `{epoch_ms, uptime_ms[, applied:true]}`。
+    pub async fn device_time(&self, epoch_ms: Option<i64>) -> Result<Value> {
+        let params = epoch_ms
+            .map(|t| json!({ "epoch_ms": t }))
+            .unwrap_or_else(|| json!({}));
+        self.request("device.time", params, Duration::from_secs(5))
+            .await
+    }
+
+    /// `device.reboot` 重启（全协议唯一 L3）。`confirm` **必须为 true**（缺 2003）；
+    /// 设备回 `{accepted:true}` 后延迟 1s 重启——**BLE 断连属预期**，60s 内重连 hello 验证。
+    /// REBOOT 为 signature 权限仅平台签名 sys 包持有（dev 包 1003）。
+    pub async fn device_reboot(&self, confirm: bool) -> Result<Value> {
+        self.request(
+            "device.reboot",
+            json!({ "confirm": confirm }),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
     /// `wifi.scan` 扫描周围 WiFi（L1，35s：设备端含 SPRD startScan 等待；indexed 流式聚合；
     /// 幂等查询走超时重试）。
     /// 返回 `{total, items:[{ssid,bssid,rssi,security,frequency}]}`（rssi 降序、同名去重）；
