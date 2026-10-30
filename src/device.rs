@@ -492,9 +492,92 @@ impl DyjDevice {
         .await
     }
 
-    /// `camera.torch` 闪光灯常亮开关（L2*）。capture/record 进行中报 3001（闪光单元占用）。
-    pub async fn camera_torch(&self, on: bool) -> Result<Value> {
-        self.request("camera.torch", json!({ "on": on }), Duration::from_secs(5))
+    // ==== 传感器域（sensor.*，0.1.9 批 2，camera-sensor-system 方案 §4）====
+
+    /// `sensor.status` 传感器能力与流状态（L1）。
+    /// 返回 `{available:["magnetic","orientation","pressure","step_counter","rotation_vector"],
+    /// streaming, types?, interval_ms?}`；加速度计为桩、光感/距离感无 HAL，不在 available。
+    pub async fn sensor_status(&self) -> Result<Value> {
+        self.request("sensor.status", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `sensor.read` 单次实读（L1）。`types`：available 子集，`None` = 全部可用。
+    /// 返回 `{values:{pressure_hpa?, magnetic_ut?{x,y,z}, orientation_deg?{azimuth,pitch,roll},
+    /// steps?, rotation?{x,y,z,w}}}`；未即时交付的类型字段省略不报错（计步器为 onChange 型）；
+    /// steps 为开机以来累计值；桩/未知类型报 1002。
+    pub async fn sensor_read(&self, types: Option<&[&str]>) -> Result<Value> {
+        let params = types
+            .map(|ts| json!({ "types": ts }))
+            .unwrap_or_else(|| json!({}));
+        self.request("sensor.read", params, Duration::from_secs(5))
+            .await
+    }
+
+    /// `sensor.stream.start` 限流订阅（L2*；EVT `sensor.data` 一帧合并多类型最新值）。
+    /// `interval_ms`：发射周期，缺省 1000，下限 500 节流防 BLE 洪泛；重复调用 = 重置。
+    /// 断连设备端自动停。
+    pub async fn sensor_stream_start(
+        &self,
+        types: Option<&[&str]>,
+        interval_ms: Option<u64>,
+    ) -> Result<Value> {
+        let mut params = serde_json::Map::new();
+        if let Some(ts) = types {
+            params.insert("types".into(), json!(ts));
+        }
+        if let Some(ms) = interval_ms {
+            params.insert("interval_ms".into(), json!(ms));
+        }
+        self.request(
+            "sensor.stream.start",
+            Value::Object(params),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
+    /// `sensor.stream.stop` 停止订阅（L2*）。返回 `{streaming:false, frames_sent}`。
+    pub async fn sensor_stream_stop(&self) -> Result<Value> {
+        self.request("sensor.stream.stop", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    // ==== 定位域（location.*，0.1.9 批 2，camera-sensor-system 方案 §4）====
+
+    /// `location.status` 定位状态（L1）。
+    /// 返回 `{enabled, gps_active, streaming, has_fix, lat?, lon?, accuracy_m?, altitude_m?,
+    /// speed_mps?, bearing_deg?, satellites?, last_fix_age_s?}`（has_fix 基于 lastKnown，
+    /// last_fix_age_s 标注新鲜度；不可用字段按 device.* 约定省略）。
+    pub async fn location_status(&self) -> Result<Value> {
+        self.request("location.status", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `location.get` 取一次定位（L2*，30s 命令超时）。`timeout_s`：1..25，缺省 20，
+    /// 区间外设备端 clamp。**无 fix 正常返回 `{has_fix:false}` 不报错**（室内无星是常态）；
+    /// 设备端前置自动开定位模式（system uid 直写）；有 fix 返回同 status 的 fix 字段组。
+    pub async fn location_get(&self, timeout_s: Option<u64>) -> Result<Value> {
+        let params = timeout_s
+            .map(|s| json!({ "timeout_s": s }))
+            .unwrap_or_else(|| json!({}));
+        self.request("location.get", params, Duration::from_secs(30))
+            .await
+    }
+
+    /// `location.stream.start` 定位订阅（L2*；EVT `location.fix` 仅新 fix 才发）。
+    /// `min_interval_s`：最小间隔，缺省 10，下限 5；重复调用 = 重置间隔。断连设备端自动停。
+    pub async fn location_stream_start(&self, min_interval_s: Option<u64>) -> Result<Value> {
+        let params = min_interval_s
+            .map(|s| json!({ "min_interval_s": s }))
+            .unwrap_or_else(|| json!({}));
+        self.request("location.stream.start", params, Duration::from_secs(5))
+            .await
+    }
+
+    /// `location.stream.stop` 停止订阅（L2*）。返回 `{streaming:false, fixes_sent}`。
+    pub async fn location_stream_stop(&self) -> Result<Value> {
+        self.request("location.stream.stop", json!({}), Duration::from_secs(5))
             .await
     }
 

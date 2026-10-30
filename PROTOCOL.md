@@ -194,6 +194,14 @@ file/upload/ota 域不新开错误码段：复用 1002 参数 / 1003 内部与�
 | `camera.record.status` | L1 | 5s | 录像状态。data: `{recording, name?, elapsed_s, max_s}` | ✅ 已实施（2026-10-29） |
 | `camera.list` | L1 | 10s | 相机文件列表（files/camera）。**indexed 流式响应（§3.3，record.list 同款）**：一条 entry 一帧 `{index, more:true, entry:{name, bytes, mtime, kind:"photo"\|"video"}}`，收尾帧 `{more:false,total}`；按名内时间戳升序（跨类型字典序 ≠ 时间序）。SDK `camera_list()` 自动聚合 `{total, items}` | ✅ 已实施（2026-10-29） |
 | `camera.delete` | L2* | 5s | 删除相机文件。params: `{name}` → `{deleted:true, freed_bytes}`；白名单外/不存在 1002；删录像中当前文件 3001 | ✅ 已实施（2026-10-29） |
+| `sensor.status` | L1 | 5s | 传感器能力与流状态。data: `{available:["magnetic","orientation","pressure","step_counter","rotation_vector"], streaming, types, interval_ms?}`（加速度计为桩、光感/距离感无 HAL → 不在列，请求即 1002；sensor 域不新开错误码段：复用 1002/1003，无即时采样帧是正常业务结果不落错误码） | 🚧 已登记（2026-10-30，批 2） |
+| `sensor.read` | L1 | 5s | 单次实读（采帧即注销）。params: `{types?:[...]}`（子集，缺省=全部可用）→ data: `{values:{pressure_hpa, magnetic_ut:{x,y,z}, orientation_deg:{azimuth,pitch,roll}, steps, rotation:{x,y,z,w}}}`（字段可选，仅已交付类型携带；steps 为开机以来累计值；桩/未知类型 1002 msg 列 available） | 🚧 已登记（2026-10-30，批 2） |
+| `sensor.stream.start` | L2* | 5s | 开启限流订阅。params: `{types?, interval_ms?:1000(下限 500)}` → `{streaming:true, interval_ms}`；EVT `sensor.data` 周期发、一帧合并多类型最新值；重复 start = 重置；断连自动停。`*规划目标 L2，授权机制实施后收紧` | 🚧 已登记（2026-10-30，批 2） |
+| `sensor.stream.stop` | L2* | 5s | 停止订阅。data: `{streaming:false, frames_sent}` | 🚧 已登记（2026-10-30，批 2） |
+| `location.status` | L1 | 5s | 定位状态。data: `{enabled, gps_active, streaming, has_fix, lat?, lon?, accuracy_m?, altitude_m?, speed_mps?, bearing_deg?, satellites?, last_fix_age_s?}`（enabled=系统定位模式非 OFF；has_fix 基于 lastKnownLocation 带 last_fix_age_s；不可用字段省略） | 🚧 已登记（2026-10-30，批 2） |
+| `location.get` | L2* | 30s | 取一次定位。params: `{timeout_s?:20(1..25)}` → 有 fix 返回 fix 字段组（has_fix:true），**无 fix 正常返回 `{has_fix:false}` 不报错**（室内无星常态，超时是业务结果）。前置自动开定位模式（system uid 直写 Secure 设置；wifi.scan 的 3401 行为不受影响）；30s 超时理由：GNSS 冷启动 TTFF 不可预期，25s 参数上限 + 5s 余量。`*规划目标 L3（隐私敏感），授权机制实施后收紧` | 🚧 已登记（2026-10-30，批 2） |
+| `location.stream.start` | L2* | 5s | 开启定位订阅。params: `{min_interval_s?:10(下限 5)}` → `{streaming:true, min_interval_s}`；EVT `location.fix` 仅新 fix 才发；重复 start = 重置；断连自动停。`*规划目标 L3（隐私敏感）` | 🚧 已登记（2026-10-30，批 2） |
+| `location.stream.stop` | L2* | 5s | 停止订阅。data: `{streaming:false, fixes_sent}` | 🚧 已登记（2026-10-30，批 2） |
 | *(其余随实施登记)* | | | | |
 
 ### 9.2 事件（待实施填充）
@@ -206,6 +214,8 @@ file/upload/ota 域不新开错误码段：复用 1002 参数 / 1003 内部与�
 | `button.event` | 按键事件（原始 + 手势全量，恒发）：`{type:"down"\|"up"\|"click"\|"double_click"\|"long_press_start"\|"long_press_end", duration_ms?}`。down/up 为原始键事件（up 带已按时长，down 无 duration）；手势带该次按压时长（long_press_end 为全按压时长，double_click 为第二按压时长，时长均由输入子系统 uptime eventTime 计算、不受转发延迟影响）。绑定动作在 long_press_start/click/double_click 触发（toggle 语义：下次同手势再触发翻转）；事件发布与动作执行解耦。帧级 ts 见 EVT 信封 | ✅ 已实施并真机验证（2026-10-26；double_click 待实按复核） |
 | `upload.state` | 录音上传状态：`{name, state:"start"\|"done"\|"failed", bytes, error?}`。成功判定三重（2xx && 服务端 ok && size && sha256 一致），成功即记已传索引并**删源释放存储**；失败保留文件等重试；事件与协议 worker 解耦（BLE 断连丢事件不影响上传本体，upload.status 可查） | ✅ 已实施并真机验证（2026-10-27） |
 | `ota.progress` | OTA 进度：`{state:"downloading"\|"verifying"\|"installing"\|"failed", progress?, bytes?, total?, error?}`。installing 发出后进程将被覆盖安装杀死、新版本自拉起（hello 回新版本号即成功）；failed 后设备存活，ota.status 查原因 | ✅ 已实施并真机验证（2026-10-27） |
+| `sensor.data` | 传感器流帧（sensor.stream.start 开启）：`{values:{...同 sensor.read values 形状，仅含已交付类型}, interval_ms}`（周期性一帧合并多类型；500ms 下限节流；BLE 断连自动停流） | 🚧 已登记（2026-10-30，批 2） |
+| `location.fix` | 新定位到达（location.stream.start 开启）：`{lat, lon, accuracy_m?, altitude_m?, speed_mps?, bearing_deg?, satellites?, ts}`（仅新 fix 才发；BLE 断连自动停流） | 🚧 已登记（2026-10-30，批 2） |
 | *(随实施登记：battery.* 等)* | | |
 
 ### 9.3 待定项

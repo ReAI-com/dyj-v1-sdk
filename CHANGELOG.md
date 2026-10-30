@@ -2,6 +2,21 @@
 
 版本与设备固件（Android 系统应用，不开源）按批配套发布：SDK 0.1.x ↔ app 0.8.x 同批落地、同批真机验证。协议契约见 [PROTOCOL.md](PROTOCOL.md)。
 
+## 0.1.9 — 2026-10-30（配套 app 0.8.10）
+
+- **sensor 域**（真机 HAL 实注册 5 类）：`sensor_status` / `sensor_read`（单次实读，
+  未即时交付的类型字段省略不报错；`steps` 为开机累计值）/ `sensor_stream_start` /
+  `sensor_stream_stop`（EVT `sensor.data` 一帧合并多类型，500ms 下限节流防 BLE 洪泛）。
+  加速度计为桩（"NULL Sensor"）、光感/距离感无 HAL → 不在 available，请求报 1002
+- **location 域**：`location_status` / `location_get`（无 fix 正常返回 `{has_fix:false}`
+  不报错——室内无星常态；设备端前置自动开定位模式）/ `location_stream_start` /
+  `location_stream_stop`（EVT `location.fix` 仅新 fix）。`wifi.scan` 的 3401 行为不受影响
+- CLI：`sensor status|read|stream start/stop`、`location status|get|stream start/stop`
+- 示例：`sensor_test.rs`（量级判读 + 节流帧率 + 桩拒绝）、`location_test.rs`
+  （TTFF 基线 + 无 fix 语义），均单连接
+- 清理残留：`camera_torch` 方法与 CLI `camera torch` 子命令移除（0.1.7 漏网——
+  真机确认无闪光灯硬件，该命令未进任何真机验证路径）
+
 ## 0.1.8 — 2026-10-29（配套 app 0.8.9）
 
 - **录像修复配套**（SDK 接口无变化，0.1.7 全部能力继承）：

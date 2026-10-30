@@ -14,13 +14,21 @@
 //!   dyj_cli button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]
 //!   dyj_cli record list [设备名]             录音分段列表（indexed 聚合）
 //!   dyj_cli record delete <name> [设备名]    删除录音分段
-//!   dyj_cli camera status [设备名]           摄像头状态（torch/recording/计数）
+//!   dyj_cli camera status [设备名]           摄像头状态（recording/计数）
 //!   dyj_cli camera capture [设备名]          拍照（落 files/camera，经 upload 上传）
 //!   dyj_cli camera record start [max_s] [设备名]   开始录像（缺省 600s 上限）
 //!   dyj_cli camera record stop [设备名]      停止录像
 //!   dyj_cli camera record status [设备名]    录像状态
 //!   dyj_cli camera list [设备名]             相机文件列表（indexed 聚合）
 //!   dyj_cli camera delete <name> [设备名]    删除相机文件
+//!   dyj_cli sensor status [设备名]           传感器能力与流状态（5 类，加速度计为桩不在列）
+//!   dyj_cli sensor read [type,...|all] [设备名]   单次实读（气压/地磁/方向/计步/旋矢）
+//!   dyj_cli sensor stream start [interval_ms] [设备名]   开限流订阅（EVT sensor.data）
+//!   dyj_cli sensor stream stop [设备名]      停订阅
+//!   dyj_cli location status [设备名]         定位状态（enabled/gps_active/last fix）
+//!   dyj_cli location get [timeout_s] [设备名]   取一次定位（无 fix 正常返回 has_fix:false）
+//!   dyj_cli location stream start [min_interval_s] [设备名]   开订阅（EVT location.fix）
+//!   dyj_cli location stream stop [设备名]    停订阅
 //!   dyj_cli upload status [设备名]           上传状态
 //!   dyj_cli upload config [设备名]           上传 endpoint 配置（三级读取）
 //!   dyj_cli upload set <url> [token] [设备名]  覆盖上传 endpoint（空串清覆盖）
@@ -67,7 +75,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!(
-            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]"
+            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|sensor|location> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
         );
         std::process::exit(2);
     }
@@ -310,20 +318,8 @@ async fn main() {
                     .await
                 }
                 "torch" => {
-                    let on = match args.get(2).map(|s| s.as_str()) {
-                        Some("on") => true,
-                        Some("off") => false,
-                        _ => {
-                            eprintln!("ERROR: 用法 dyj_cli camera torch <on|off> [设备名]");
-                            std::process::exit(2);
-                        }
-                    };
-                    let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
-                    with_device(
-                        name,
-                        move |device| async move { device.camera_torch(on).await },
-                    )
-                    .await
+                    eprintln!("ERROR: camera torch 已移除（真机确认无闪光灯硬件，0.1.7 起）");
+                    std::process::exit(2);
                 }
                 "record" => {
                     let rsub = args.get(2).map(|s| s.as_str()).unwrap_or("status");
@@ -368,9 +364,144 @@ async fn main() {
                     }
                 }
                 other => {
-                    eprintln!(
-                        "未知 camera 子命令: {other}（status/capture/list/delete/torch/record）"
-                    );
+                    eprintln!("未知 camera 子命令: {other}（status/capture/list/delete/record）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "sensor" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("status");
+            match sub {
+                "status" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.sensor_status().await }).await
+                }
+                "read" => {
+                    // read [type,...|all] [设备名]：逗号分隔类型子集，all/缺省 = 全部可用
+                    let arg2 = args.get(2).cloned();
+                    let (types, name): (Option<Vec<&str>>, String) = match arg2.as_deref() {
+                        None | Some("all") | Some("") => (None, DEFAULT_DEVICE.into()),
+                        Some(csv) if !csv.parse::<u64>().is_ok() => (
+                            Some(
+                                csv.split(',')
+                                    .map(str::trim)
+                                    .filter(|s| !s.is_empty())
+                                    .collect(),
+                            ),
+                            args.get(3)
+                                .cloned()
+                                .unwrap_or_else(|| DEFAULT_DEVICE.into()),
+                        ),
+                        Some(_) => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
+                    };
+                    with_device(&name, move |device| {
+                        let ts = types.map(|v| v.iter().copied().collect::<Vec<_>>());
+                        async move { device.sensor_read(ts.as_deref()).await }
+                    })
+                    .await
+                }
+                "stream" => {
+                    let ssub = args.get(2).map(|s| s.as_str()).unwrap_or("start");
+                    match ssub {
+                        "start" => {
+                            // stream start [interval_ms] [设备名]
+                            let arg3 = args.get(3).cloned();
+                            let (ms, name) =
+                                match arg3.as_deref().and_then(|s| s.parse::<u64>().ok()) {
+                                    Some(v) => (
+                                        Some(v),
+                                        args.get(4)
+                                            .cloned()
+                                            .unwrap_or_else(|| DEFAULT_DEVICE.into()),
+                                    ),
+                                    None => (None, arg3.unwrap_or_else(|| DEFAULT_DEVICE.into())),
+                                };
+                            with_device(&name, move |device| async move {
+                                device.sensor_stream_start(None, ms).await
+                            })
+                            .await
+                        }
+                        "stop" => {
+                            let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                            with_device(
+                                name,
+                                |device| async move { device.sensor_stream_stop().await },
+                            )
+                            .await
+                        }
+                        other => {
+                            eprintln!("未知 sensor stream 子命令: {other}（start/stop）");
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                other => {
+                    eprintln!("未知 sensor 子命令: {other}（status/read/stream）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "location" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("status");
+            match sub {
+                "status" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.location_status().await }).await
+                }
+                "get" => {
+                    // get [timeout_s] [设备名]
+                    let arg2 = args.get(2).cloned();
+                    let (timeout, name) = match arg2.as_deref().and_then(|s| s.parse::<u64>().ok())
+                    {
+                        Some(v) => (
+                            Some(v),
+                            args.get(3)
+                                .cloned()
+                                .unwrap_or_else(|| DEFAULT_DEVICE.into()),
+                        ),
+                        None => (None, arg2.unwrap_or_else(|| DEFAULT_DEVICE.into())),
+                    };
+                    with_device(&name, move |device| async move {
+                        device.location_get(timeout).await
+                    })
+                    .await
+                }
+                "stream" => {
+                    let ssub = args.get(2).map(|s| s.as_str()).unwrap_or("start");
+                    match ssub {
+                        "start" => {
+                            // stream start [min_interval_s] [设备名]
+                            let arg3 = args.get(3).cloned();
+                            let (iv, name) =
+                                match arg3.as_deref().and_then(|s| s.parse::<u64>().ok()) {
+                                    Some(v) => (
+                                        Some(v),
+                                        args.get(4)
+                                            .cloned()
+                                            .unwrap_or_else(|| DEFAULT_DEVICE.into()),
+                                    ),
+                                    None => (None, arg3.unwrap_or_else(|| DEFAULT_DEVICE.into())),
+                                };
+                            with_device(&name, move |device| async move {
+                                device.location_stream_start(iv).await
+                            })
+                            .await
+                        }
+                        "stop" => {
+                            let name = args.get(3).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                            with_device(name, |device| async move {
+                                device.location_stream_stop().await
+                            })
+                            .await
+                        }
+                        other => {
+                            eprintln!("未知 location stream 子命令: {other}（start/stop）");
+                            std::process::exit(2);
+                        }
+                    }
+                }
+                other => {
+                    eprintln!("未知 location 子命令: {other}（status/get/stream）");
                     std::process::exit(2);
                 }
             }
