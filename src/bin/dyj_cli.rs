@@ -11,7 +11,7 @@
 //!   dyj_cli led clear [设备名]
 //!   dyj_cli button status [设备名]           按键能力（手势/阈值/绑定表/最近事件）
 //!   dyj_cli button bind [设备名]             查询手势→动作绑定表
-//!   dyj_cli button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]
+//!   dyj_cli button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]
 //!   dyj_cli record list [设备名]             录音分段列表（indexed 聚合）
 //!   dyj_cli record delete <name> [设备名]    删除录音分段
 //!   dyj_cli camera status [设备名]           摄像头状态（recording/计数）
@@ -25,6 +25,10 @@
 //!   dyj_cli sensor read [type,...|all] [设备名]   单次实读（气压/地磁/方向/计步/旋矢）
 //!   dyj_cli sensor stream start [interval_ms] [设备名]   开限流订阅（EVT sensor.data）
 //!   dyj_cli sensor stream stop [设备名]      停订阅
+//!   dyj_cli asr status [设备名]              端侧识别状态（模型/加载/会话）
+//!   dyj_cli asr start [秒=30] [once] [设备名]  开识别并打印 asr.partial/asr.final 事件，到秒数后 stop
+//!   dyj_cli asr stop [设备名]                停识别（回残余文本）
+//!   dyj_cli asr config [attach=on|off] [partial=on|off] [设备名]   查/改设置（attach=跟随实时流自动识别+开机预加载）
 //!   dyj_cli location status [设备名]         定位状态（enabled/gps_active/last fix）
 //!   dyj_cli location get [timeout_s] [设备名]   取一次定位（无 fix 正常返回 has_fix:false）
 //!   dyj_cli location stream start [min_interval_s] [设备名]   开订阅（EVT location.fix）
@@ -81,7 +85,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!(
-            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|sensor|location|vibrator|volume|device> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
+            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|asr|sensor|location|vibrator|volume|device> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  asr status [设备名]\n  asr start [秒=30] [once] [设备名]\n  asr stop [设备名]\n  asr config [attach=on|off] [partial=on|off] [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
         );
         std::process::exit(2);
     }
@@ -257,7 +261,7 @@ async fn main() {
                     let action = args.get(3).cloned().unwrap_or_default();
                     if gesture.is_empty() || action.is_empty() {
                         eprintln!(
-                            "ERROR: 用法 dyj_cli button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle> [设备名]"
+                            "ERROR: 用法 dyj_cli button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]"
                         );
                         std::process::exit(2);
                     }
@@ -378,6 +382,73 @@ async fn main() {
                 }
                 other => {
                     eprintln!("未知 camera 子命令: {other}（status/capture/list/delete/record）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "asr" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("status");
+            match sub {
+                "status" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.asr_status().await }).await
+                }
+                "start" => {
+                    // start [秒=30] [once] [设备名]：开识别，事件由 with_device 打印，到时 stop
+                    let mut rest: Vec<String> = args[2..].to_vec();
+                    let mut secs: u64 = 30;
+                    if let Some(v) = rest.first().and_then(|s| s.parse::<u64>().ok()) {
+                        secs = v;
+                        rest.remove(0);
+                    }
+                    let mut once = false;
+                    if rest.first().map(|s| s == "once").unwrap_or(false) {
+                        once = true;
+                        rest.remove(0);
+                    }
+                    let name = rest
+                        .first()
+                        .cloned()
+                        .unwrap_or_else(|| DEFAULT_DEVICE.into());
+                    with_device(&name, move |device| async move {
+                        let mode = if once { Some("once") } else { None };
+                        let started = device.asr_start(mode, Some(true), None).await?;
+                        println!("[asr.start] {started}");
+                        println!("[asr] 请对设备说话（{secs}s 后自动 stop）…");
+                        tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
+                        device.asr_stop().await
+                    })
+                    .await
+                }
+                "stop" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.asr_stop().await }).await
+                }
+                "config" => {
+                    // config [attach=on|off] [partial=on|off] [设备名]：无 k=v 即查询
+                    let mut attach = None;
+                    let mut partial = None;
+                    let mut name = DEFAULT_DEVICE.to_string();
+                    for a in &args[2..] {
+                        match a.split_once('=') {
+                            Some(("attach", v)) => attach = Some(matches!(v, "on" | "true" | "1")),
+                            Some(("partial", v)) => {
+                                partial = Some(matches!(v, "on" | "true" | "1"))
+                            }
+                            _ => name = a.clone(),
+                        }
+                    }
+                    with_device(&name, move |device| async move {
+                        if attach.is_none() && partial.is_none() {
+                            device.asr_config_get().await
+                        } else {
+                            device.asr_config_set(attach, partial).await
+                        }
+                    })
+                    .await
+                }
+                other => {
+                    eprintln!("未知 asr 子命令: {other}（status/start/stop/config）");
                     std::process::exit(2);
                 }
             }

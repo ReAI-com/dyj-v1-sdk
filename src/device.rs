@@ -560,6 +560,75 @@ impl DyjDevice {
             .await
     }
 
+    // ==== 端侧语音识别域（asr.*，0.1.13，asr 方案 2026-11-02）====
+
+    /// `asr.status` 端侧识别状态（L1）。
+    /// 返回 `{available, model:"small-ctc-zh-2025-04-01", loaded, running, mode?, session?, threads, finals, dropped_frames}`。
+    pub async fn asr_status(&self) -> Result<Value> {
+        self.request("asr.status", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `asr.start` 开始端侧流式识别（L2*）。引擎未开自动开；首次调用加载模型（真机 ~10s，超时 20s）。
+    /// `mode`：`"continuous"`（缺省，到 `max_s` 自动停）或 `"once"`（首个非空 final 后自动停）；
+    /// `partial`：是否发 EVT `asr.partial`（缺省 true，≤2 次/s）；`max_s` 缺省 1800，上限 3600。
+    /// 结果走事件：`asr.partial {session,text}` / `asr.final {session,seq,text,duration_ms}`。
+    /// 返回 `{running:true, session, mode, partial, max_s, capture_auto_started, loaded_ms?, model}`。
+    pub async fn asr_start(
+        &self,
+        mode: Option<&str>,
+        partial: Option<bool>,
+        max_s: Option<u32>,
+    ) -> Result<Value> {
+        let mut params = serde_json::Map::new();
+        if let Some(m) = mode {
+            params.insert("mode".into(), json!(m));
+        }
+        if let Some(p) = partial {
+            params.insert("partial".into(), json!(p));
+        }
+        if let Some(s) = max_s {
+            params.insert("max_s".into(), json!(s));
+        }
+        self.request("asr.start", Value::Object(params), Duration::from_secs(20))
+            .await
+    }
+
+    /// `asr.stop` 停止识别（L2*）。返回 `{running:false, text?, finals}`，text = 停止时刷出的残余句。
+    pub async fn asr_stop(&self) -> Result<Value> {
+        self.request("asr.stop", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `asr.config.get` 端侧识别设置（L1）：`{attach, partial}`。
+    /// `attach`=true：识别跟随 BLE 实时流自动开/关（hello auto_audio 一连即出字）且开机预加载模���。
+    pub async fn asr_config_get(&self) -> Result<Value> {
+        self.request("asr.config.get", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `asr.config.set` 部分更新设置（L2*；至少给一项），写穿持久化后回快照。
+    /// attach 置 true 时设备后台预加载模型（不阻塞响应）。
+    pub async fn asr_config_set(
+        &self,
+        attach: Option<bool>,
+        partial: Option<bool>,
+    ) -> Result<Value> {
+        let mut params = serde_json::Map::new();
+        if let Some(a) = attach {
+            params.insert("attach".into(), json!(a));
+        }
+        if let Some(p) = partial {
+            params.insert("partial".into(), json!(p));
+        }
+        self.request(
+            "asr.config.set",
+            Value::Object(params),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
     // ==== 定位域（location.*，0.1.9 批 2，camera-sensor-system 方案 §4）====
 
     /// `location.status` 定位状态（L1）。
@@ -1020,6 +1089,8 @@ pub fn passthrough_timeout(cmd: &str) -> Duration {
     match cmd {
         // 设备端 30s（location.get：timeout_s 参数上限 25 + 执行余量）
         "location.get" => Duration::from_secs(32),
+        // 设备端 20s（asr.start 首次懒加载模型 ~10s；预加载后秒回）
+        "asr.start" => Duration::from_secs(22),
         // 设备端 35s（SPRD 扫描等待 / 连接同步 / AP 启动）
         "wifi.scan" | "wifi.connect" | "ap.start" => Duration::from_secs(37),
         // 设备端 10s（camera2 采集 / 列表聚合 / 外网 HTTPS）
