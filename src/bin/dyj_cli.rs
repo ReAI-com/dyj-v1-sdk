@@ -39,7 +39,7 @@
 //!   dyj_cli volume set <music|ring|system> <value> [设备名]   设音量（回读生效值）
 //!   dyj_cli device time [epoch_ms] [设备名]  回读时钟 / 对时（联网自动对时会覆盖）
 //!   dyj_cli device reboot [设备名]           重启（自动带 confirm；断连属预期，60s 内重连）
-//!   dyj_cli device shutdown [--confirm] [设备名]   真关机（断连属预期；需长按电源键开机）
+//!   dyj_cli device shutdown --confirm [设备名]   真关机（单向终局，--confirm 必填；断连属预期，需长按电源键开机）
 //!   dyj_cli power status [设备名]            电源模式与各子系统状态快照
 //!   dyj_cli power mode <normal|low_power_record|low_power_standby> [--segment-min N] [--session HEX] [设备名]   切换电源模式
 //!   dyj_cli upload status [设备名]           上传状态
@@ -88,7 +88,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!(
-            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|asr|sensor|location|vibrator|volume|device|power> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  asr status [设备名]\n  asr start [秒=30] [once] [设备名]\n  asr stop [设备名]\n  asr config [attach=on|off] [partial=on|off] [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot|shutdown [设备名]\n  power status|mode <normal|low_power_record|low_power_standby> [--segment-min N] [--session HEX] [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
+            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|asr|sensor|location|vibrator|volume|device|power> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  asr status [设备名]\n  asr start [秒=30] [once] [设备名]\n  asr stop [设备名]\n  asr config [attach=on|off] [partial=on|off] [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot|shutdown --confirm [设备名]\n  power status|mode <normal|low_power_record|low_power_standby> [--segment-min N] [--session HEX] [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
         );
         std::process::exit(2);
     }
@@ -690,6 +690,14 @@ async fn main() {
                     .await
                 }
                 "shutdown" => {
+                    // 单向终局命令：CLI 侧强制显式确认（reboot 可 60s 内恢复故自动 confirm，shutdown 不可比）
+                    if !args.iter().skip(2).any(|a| a.as_str() == "--confirm") {
+                        eprintln!(
+                            "ERROR: device.shutdown 是单向终局操作（断电后无法远程开机，需长按机身电源键），必须显式带 --confirm"
+                        );
+                        eprintln!("用法: dyj_cli device shutdown --confirm [设备名]");
+                        std::process::exit(2);
+                    }
                     let name = args
                         .iter()
                         .skip(2)

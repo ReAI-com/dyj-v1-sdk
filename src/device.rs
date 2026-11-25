@@ -756,11 +756,14 @@ impl DyjDevice {
     }
 
     /// `power.mode.set` 切换运行电源模式（L2*）：`normal` / `low_power_record` / `low_power_standby`。
+    ///
+    /// 客户端超时走 `passthrough_timeout("power.mode.set")`=12s（设备端预算 10s + 余量，
+    /// 规则 §7：客户端必须 > 设备端，否则设备端吃满预算时客户端先放弃丢响应）。
     pub async fn power_mode_set(&self, mode: PowerMode) -> Result<Value> {
         self.request(
             "power.mode.set",
             build_power_mode_params(mode, None, None),
-            Duration::from_secs(10),
+            passthrough_timeout("power.mode.set"),
         )
         .await
     }
@@ -775,7 +778,7 @@ impl DyjDevice {
         self.request(
             "power.mode.set",
             build_power_mode_params(PowerMode::LowPowerRecord, segment_min, session),
-            Duration::from_secs(10),
+            passthrough_timeout("power.mode.set"),
         )
         .await
     }
