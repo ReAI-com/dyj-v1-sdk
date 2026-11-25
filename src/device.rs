@@ -11,7 +11,7 @@ use tokio::sync::{broadcast, mpsc};
 use btleplug::api::Manager as _;
 
 use crate::error::{Result, SdkError};
-use crate::protocol::{Frame, ProtocolInfo};
+use crate::protocol::{Frame, PowerMode, ProtocolInfo};
 use crate::transport::{self, ConnectedTransport};
 
 /// 设备事件（语义事件 + 响应外的原始帧兜底，前向兼容新固件事件不丢数据）。
@@ -724,7 +724,7 @@ impl DyjDevice {
             .await
     }
 
-    /// `device.reboot` 重启（全协议唯一 L3）。`confirm` **必须为 true**（缺 2003）；
+    /// `device.reboot` 重启（L3）。`confirm` **必须为 true**（缺 2003）；
     /// 设备回 `{accepted:true}` 后延迟 1s 重启——**BLE 断连属预期**，60s 内重连 hello 验证。
     /// REBOOT 为 signature 权限仅平台签名 sys 包持有（dev 包 1003）。
     pub async fn device_reboot(&self, confirm: bool) -> Result<Value> {
@@ -734,6 +734,60 @@ impl DyjDevice {
             Duration::from_secs(5),
         )
         .await
+    }
+
+    /// `device.shutdown` 真关机（L3，单向终局）。`confirm` **必须为 true**（缺 2003）；
+    /// 设备先安全停录/刷盘，返回 `{accepted:true, mode:"power_off", wake_key:"power", wake_hint:"长按机身电源键开机"}`
+    /// 后延迟 1s 调用系统关机——**BLE 断连属预期**；真关机断电后无法由手机远程开机，客户端须持久化「已关机」状态。
+    /// REBOOT 为 signature 权限仅平台签名 sys 包持有（dev 包 1003）。
+    pub async fn device_shutdown(&self, confirm: bool) -> Result<Value> {
+        self.request(
+            "device.shutdown",
+            json!({ "confirm": confirm }),
+            Duration::from_secs(5),
+        )
+        .await
+    }
+
+    /// `power.status` 查询当前电源模式与子系统开启快照（L1）。
+    pub async fn power_status(&self) -> Result<Value> {
+        self.request_idem("power.status", json!({}), Duration::from_secs(5))
+            .await
+    }
+
+    /// `power.mode.set` 切换运行电源模式（L2*）：`normal` / `low_power_record` / `low_power_standby`。
+    pub async fn power_mode_set(&self, mode: PowerMode) -> Result<Value> {
+        self.request(
+            "power.mode.set",
+            build_power_mode_params(mode, None, None),
+            Duration::from_secs(10),
+        )
+        .await
+    }
+
+    /// 切换为深度待机（低功耗静默录音，`low_power_record`）：关 Wi-Fi/AP/LED/ASR/传感器/定位/相机与实时音频流，
+    /// 保留本地静默录音与低功耗 BLE 广播。
+    pub async fn power_low_power_record(
+        &self,
+        segment_min: Option<u64>,
+        session: Option<&str>,
+    ) -> Result<Value> {
+        self.request(
+            "power.mode.set",
+            build_power_mode_params(PowerMode::LowPowerRecord, segment_min, session),
+            Duration::from_secs(10),
+        )
+        .await
+    }
+
+    /// 切换为低功耗待机（`low_power_standby`）：仅保留低功耗 BLE 广播等待唤醒（及长按物理键唤醒）。
+    pub async fn power_standby(&self) -> Result<Value> {
+        self.power_mode_set(PowerMode::LowPowerStandby).await
+    }
+
+    /// 从低功耗模式恢复为常规运行态（`normal`）。
+    pub async fn power_wake(&self) -> Result<Value> {
+        self.power_mode_set(PowerMode::Normal).await
     }
 
     /// `wifi.scan` 扫描周围 WiFi（L1，35s：设备端含 SPRD startScan 等待；indexed 流式聚合；
@@ -1080,6 +1134,23 @@ impl Drop for RealtimeAudioSession {
     }
 }
 
+/// 构造 `power.mode.set` 请求参数。
+pub(crate) fn build_power_mode_params(
+    mode: PowerMode,
+    segment_min: Option<u64>,
+    session: Option<&str>,
+) -> Value {
+    let mut params = serde_json::Map::new();
+    params.insert("mode".into(), json!(mode.as_str()));
+    if let Some(m) = segment_min {
+        params.insert("segment_min".into(), json!(m));
+    }
+    if let Some(s) = session {
+        params.insert("session".into(), json!(s));
+    }
+    Value::Object(params)
+}
+
 /// 透传命令的客户端超时表（design.md §9 登记超时 + 客户端余量；规则 §7：客户端
 /// 必须 ≥ 设备端最长执行时间，否则客户端先放弃会**丢掉正常业务响应**——
 /// 2026-10-30 实证：location.get 设备端等 GPS 最长 30s，console/CLI 统一 10s
@@ -1093,10 +1164,9 @@ pub fn passthrough_timeout(cmd: &str) -> Duration {
         "asr.start" => Duration::from_secs(22),
         // 设备端 35s（SPRD 扫描等待 / 连接同步 / AP 启动）
         "wifi.scan" | "wifi.connect" | "ap.start" => Duration::from_secs(37),
-        // 设备端 10s（camera2 采集 / 列表聚合 / 外网 HTTPS）
-        "camera.capture" | "camera.list" | "record.list" | "led.status" | "ota.check" => {
-            Duration::from_secs(12)
-        }
+        // 设备端 10s（camera2 采集 / 列表聚合 / 外网 HTTPS / 电源模式切换）
+        "camera.capture" | "camera.list" | "record.list" | "led.status" | "ota.check"
+        | "power.mode.set" => Duration::from_secs(12),
         // 其余设备端 ≤5s，协议默认 10s 足够
         _ => Duration::from_secs(10),
     }
@@ -1105,6 +1175,35 @@ pub fn passthrough_timeout(cmd: &str) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn build_power_mode_params_includes_optional_record_fields() {
+        assert_eq!(
+            build_power_mode_params(PowerMode::LowPowerStandby, None, None),
+            json!({ "mode": "low_power_standby" })
+        );
+        assert_eq!(
+            build_power_mode_params(PowerMode::LowPowerRecord, Some(5), Some("AABBCCDD")),
+            json!({
+                "mode": "low_power_record",
+                "segment_min": 5,
+                "session": "AABBCCDD",
+            })
+        );
+    }
+
+    #[test]
+    fn passthrough_timeout_covers_power_commands() {
+        assert_eq!(
+            passthrough_timeout("power.mode.set"),
+            Duration::from_secs(12)
+        );
+        assert_eq!(
+            passthrough_timeout("device.shutdown"),
+            Duration::from_secs(10)
+        );
+        assert_eq!(passthrough_timeout("power.status"), Duration::from_secs(10));
+    }
 
     #[test]
     fn response_done_semantics_match_protocol_3_3() {

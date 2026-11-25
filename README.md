@@ -114,7 +114,8 @@ server.download_to_dir(&device_id, "./archive", None).await?;  // 全量回拉
 | 相机 | `camera_status()` `camera_capture()` `camera_record_start/stop/status()` `camera_list()` `camera_delete(name)` | 拍照/纯视频录像（**分段**：`segment_s` 缺省 30s 稳保 16MB 上传，`camera.segment` 事件，按 session 名分组），媒体经上传域走 WiFi |
 | 传感器 | `sensor_status()` `sensor_read(types)` `sensor_stream_start/stop()` | 5 类实读（磁力/方向/气压/计步/旋矢）+ 500ms 下限节流订阅（EVT `sensor.data`） |
 | 定位 | `location_status()` `location_get(timeout_s)` `location_stream_start/stop()` | GNSS 一次取位（无 fix 正常返回）+ 订阅（EVT `location.fix`）；设备端自动开定位模式 |
-| 系统控制 | `vibrator_once/cancel()` `volume_get/set()` `device_time(epoch_ms)` `device_reboot(confirm)` | 震动（时长+强度）/ 三流音量 / 对时 / 重启（全协议唯一 L3，断连属预期） |
+| 系统控制 | `vibrator_once/cancel()` `volume_get/set()` `device_time(epoch_ms)` `device_reboot(confirm)` `device_shutdown(confirm)` | 震动 / 三流音量 / 对时 / 重启 / 真关机（L3，断连属预期，关机后需长按电源键开机） |
+| 电源模式 | `power_status()` `power_mode_set(mode)` `power_low_power_record(segment_min, session)` `power_standby()` `power_wake()` | `normal` / `low_power_record`（深度待机低功耗录音） / `low_power_standby`（低功耗待机，支持蓝牙或长按物理键唤醒） |
 | 远端服务器 | `ServerClient::new(origin)` → `list_files / download_file_to / download_to_dir` | 已上传媒体对账/回拉（见自部署媒体服务器） |
 | 事件 | `subscribe_events()` | `DeviceEvent` 单一枚举，未知事件 `Unhandled` 兜底 |
 | 通用 | `request(cmd, params, timeout)` | 未封装命令的透传出口 |
@@ -139,7 +140,8 @@ dyj_cli sensor status|read|stream start/stop
 dyj_cli location status|get|stream start/stop
 dyj_cli vibrator once/cancel
 dyj_cli volume get|set <music|ring|system> <value>
-dyj_cli device time|reboot
+dyj_cli device time|reboot|shutdown
+dyj_cli power status|mode <normal|low_power_record|low_power_standby>
 dyj_cli server files|pull <origin> <deviceId>   # 远端已上传文件对账/回拉（不走 BLE）
 dyj_cli ota check|install|status|config|set
 dyj_cli audio [秒] [输出.wav]          # 实时音频录 wav

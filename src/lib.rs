@@ -22,5 +22,5 @@ pub use device::{
     passthrough_timeout, DeviceEvent, DeviceManager, DyjDevice, RealtimeAudioSession,
 };
 pub use error::SdkError;
-pub use protocol::{Frame, ProtocolInfo};
+pub use protocol::{Frame, PowerMode, ProtocolInfo};
 pub use server::{SavedServerFile, ServerClient, ServerFileEntry, ServerFileList};
