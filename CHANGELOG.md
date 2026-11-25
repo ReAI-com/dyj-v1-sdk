@@ -2,6 +2,15 @@
 
 版本与设备固件（Android 系统应用，不开源）按批配套发布：SDK 0.1.x ↔ app 0.8.x 同批落地、同批真机验证。协议契约见 [PROTOCOL.md](PROTOCOL.md)。
 
+## Unreleased
+
+- **真关机与电源管理**（[#1](https://github.com/ReAI-com/dyj-v1-sdk/issues/1)）：
+  - 新增 `device_shutdown(confirm)`（L3）：`confirm:true` 必填（缺 2003），设备刷盘后回 `{accepted:true, mode:"power_off", wake_key:"power", wake_hint:"长按机身电源键开机"}` 并延迟 1s 真关机断电，供客户端持久化关机状态与开机指引；
+  - 新增 `PowerMode`（`Normal` / `LowPowerRecord` / `LowPowerStandby`）及 `power_status()`、`power_mode_set(mode)`、`power_low_power_record(segment_min, session)`、`power_standby()`、`power_wake()`；
+  - `power.mode.changed` 事件登记（含 `reason:"command"|"button_wake"|"boot"`，`boot` 为预留值——电源模式持久化实施前重启后恒回 `normal` 且不补发事件）；
+  - CLI 新增 `dyj_cli device shutdown --confirm`（单向终局命令强制显式确认）、`dyj_cli power status`、`dyj_cli power mode`；
+  - `power_mode_set` / `power_low_power_record` 客户端超时对齐 `passthrough_timeout` 12s 余量规则（设备端 10s 预算，客户端不得≤设备端）。
+
 ## 0.1.12 — 2026-10-30（配套 app 0.8.12）
 
 - **camera.record 分段**（issue #8）：`camera_record_start` 新增 `segment_s`

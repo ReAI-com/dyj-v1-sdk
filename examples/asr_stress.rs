@@ -53,7 +53,7 @@ async fn main() -> Result<(), SdkError> {
     let mut last_hb = started;
 
     loop {
-        while let Ok(_) = audio.try_recv() {
+        while audio.try_recv().is_ok() {
             chunks += 1;
         }
         let got = tokio::time::timeout(Duration::from_secs(1), events.recv()).await;

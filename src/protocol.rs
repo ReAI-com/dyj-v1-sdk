@@ -1,9 +1,58 @@
 //! 纯协议层：文本帧 CMD/RSP/EVT + 二进制帧（协议规则见 PROTOCOL.md）。
 //! 无线程、无 I/O，可直接单测。
 
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::{fmt, str::FromStr};
 
 pub const FRAME_DELIMITER: &str = "\r\n";
+
+/// 设备运行电源模式（协议 §9.1 `power.mode.set` / `power.status`）。
+///
+/// 注意：真关机 `power_off` 是单向终局操作，走独立 L3 命令
+/// [`crate::DyjDevice::device_shutdown`]（`device.shutdown {confirm:true}`），
+/// 不放在可逆切换的 [`PowerMode`] 枚举中。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PowerMode {
+    /// 常规运行态：按需开启各外设与无线能力。
+    Normal,
+    /// 深度待机（低功耗录音）：仅保留本地静默录音与低功耗 BLE 广播，关闭 Wi-Fi/AP/LED/ASR/传感器/定位/相机与实时音频流。
+    LowPowerRecord,
+    /// 低功耗待机：仅保留低功耗 BLE 广播等待唤醒（及长按物理键唤醒），其余外设与录音全部关闭。
+    LowPowerStandby,
+}
+
+impl PowerMode {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            PowerMode::Normal => "normal",
+            PowerMode::LowPowerRecord => "low_power_record",
+            PowerMode::LowPowerStandby => "low_power_standby",
+        }
+    }
+}
+
+impl fmt::Display for PowerMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl FromStr for PowerMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.trim() {
+            "normal" => Ok(PowerMode::Normal),
+            "low_power_record" => Ok(PowerMode::LowPowerRecord),
+            "low_power_standby" => Ok(PowerMode::LowPowerStandby),
+            other => Err(format!(
+                "unknown power mode '{other}' (expected normal|low_power_record|low_power_standby; use device.shutdown for power_off)"
+            )),
+        }
+    }
+}
 
 /// 协议版本与能力位（与设备端 core/protocol/builtin/ProtoHandlers.kt 保持一致）。
 pub struct ProtocolInfo;
@@ -353,5 +402,28 @@ mod tests {
         raw.extend(b.encode());
         let out = asm.feed(&raw);
         assert_eq!(out, vec![a, b]);
+    }
+
+    #[test]
+    fn power_mode_roundtrip_and_rejects_power_off() {
+        assert_eq!(PowerMode::Normal.as_str(), "normal");
+        assert_eq!(PowerMode::LowPowerRecord.as_str(), "low_power_record");
+        assert_eq!(PowerMode::LowPowerStandby.as_str(), "low_power_standby");
+
+        assert_eq!("normal".parse::<PowerMode>().unwrap(), PowerMode::Normal);
+        assert_eq!(
+            "low_power_record".parse::<PowerMode>().unwrap(),
+            PowerMode::LowPowerRecord
+        );
+        assert_eq!(
+            "low_power_standby".parse::<PowerMode>().unwrap(),
+            PowerMode::LowPowerStandby
+        );
+        assert!("power_off".parse::<PowerMode>().is_err());
+
+        let encoded = serde_json::to_string(&PowerMode::LowPowerRecord).unwrap();
+        assert_eq!(encoded, "\"low_power_record\"");
+        let decoded: PowerMode = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded, PowerMode::LowPowerRecord);
     }
 }

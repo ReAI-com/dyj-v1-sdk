@@ -46,15 +46,24 @@ async fn main() -> Result<(), SdkError> {
         t1["applied"]
     );
 
-    // ---- reboot 安全路径：缺 confirm 必须被拒 2003 ----
+    // ---- reboot / shutdown 安全路径：缺 confirm 必须被拒 2003 ----
     match device.device_reboot(false).await {
         Err(SdkError::Device { code: 2003, msg }) => {
             println!("[reboot confirm 缺失] code=2003 {msg} ✓")
         }
         other => println!("[reboot confirm 缺失] 预期 2003，实际 {other:?}"),
     }
+    match device.device_shutdown(false).await {
+        Err(SdkError::Device { code: 2003, msg }) => {
+            println!("[shutdown confirm 缺失] code=2003 {msg} ✓")
+        }
+        other => println!("[shutdown confirm 缺失] 预期 2003，实际 {other:?}"),
+    }
 
-    println!("[done] 真实重启单独走 dyj_cli device reboot 验收");
+    // ---- 电源模式状态只读 ----
+    println!("[power.status] {}", device.power_status().await?);
+
+    println!("[done] 真实重启/关机分别走 dyj_cli device reboot / shutdown 验收");
     device.disconnect().await?;
     Ok(())
 }

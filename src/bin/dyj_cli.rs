@@ -39,6 +39,9 @@
 //!   dyj_cli volume set <music|ring|system> <value> [设备名]   设音量（回读生效值）
 //!   dyj_cli device time [epoch_ms] [设备名]  回读时钟 / 对时（联网自动对时会覆盖）
 //!   dyj_cli device reboot [设备名]           重启（自动带 confirm；断连属预期，60s 内重连）
+//!   dyj_cli device shutdown --confirm [设备名]   真关机（单向终局，--confirm 必填；断连属预期，需长按电源键开机）
+//!   dyj_cli power status [设备名]            电源模式与各子系统状态快照
+//!   dyj_cli power mode <normal|low_power_record|low_power_standby> [--segment-min N] [--session HEX] [设备名]   切换电源模式
 //!   dyj_cli upload status [设备名]           上传状态
 //!   dyj_cli upload config [设备名]           上传 endpoint 配置（三级读取）
 //!   dyj_cli upload set <url> [token] [设备名]  覆盖上传 endpoint（空串清覆盖）
@@ -85,7 +88,7 @@ async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         eprintln!(
-            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|asr|sensor|location|vibrator|volume|device> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  asr status [设备名]\n  asr start [秒=30] [once] [设备名]\n  asr stop [设备名]\n  asr config [attach=on|off] [partial=on|off] [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
+            "用法: dyj_cli <scan|hello|echo|send|audio|led|button|record|upload|ota|wifi|ap|camera|asr|sensor|location|vibrator|volume|device|power> [参数...]\n  scan [前缀]\n  hello [设备名={DEFAULT_DEVICE}]\n  echo <消息> [设备名]\n  send <cmd> <params-json> [设备名]\n  audio [秒] [输出.wav] [设备名]\n  led status [设备名]\n  led set <pattern> [brightness] [priority] [timeout_s] [设备名]\n  led clear [设备名]\n  button status [设备名]\n  button bind [设备名]\n  button set <click|double_click|long_press> <event_only|record.toggle|stream.toggle|capture.toggle|asr.toggle> [设备名]\n  record list [设备名]\n  record delete <name> [设备名]\n  upload status [设备名]\n  upload config [设备名]\n  upload set <url> [token] [设备名]\n  upload start [name] [设备名]\n  ota check [设备名]\n  ota install [设备名]\n  ota status [设备名]\n  ota config [设备名]\n  ota set <url> [设备名]\n  wifi scan [设备名]\n  wifi connect <ssid> [password] [设备名]\n  wifi status [设备名]\n  wifi forget [ssid|-] [设备名]\n  ap start [ssid] [password] [--allow-sta-drop] [设备名]\n  ap stop [设备名]\n  ap status [设备名]\n  ap files [设备名]\n  ap download <name> <目录> [设备名]\n  camera status|capture|list [设备名]\n  camera record start [max_s] [segment_s]|stop|status [设备名]\n  camera delete <name> [设备名]\n  asr status [设备名]\n  asr start [秒=30] [once] [设备名]\n  asr stop [设备名]\n  asr config [attach=on|off] [partial=on|off] [设备名]\n  sensor status [设备名]\n  sensor read [type,...|all] [设备名]\n  sensor stream start [interval_ms]|stop [设备名]\n  location status [设备名]\n  location get [timeout_s] [设备名]\n  location stream start [min_interval_s]|stop [设备名]\n  vibrator once [duration_ms] [amplitude]|cancel [设备名]\n  volume get|set <music|ring|system> <value> [设备名]\n  device time [epoch_ms]|reboot|shutdown --confirm [设备名]\n  power status|mode <normal|low_power_record|low_power_standby> [--segment-min N] [--session HEX] [设备名]\n  server files <origin> <deviceId>\n  server pull <origin> <deviceId> <目录> [name...]"
         );
         std::process::exit(2);
     }
@@ -465,7 +468,7 @@ async fn main() {
                     let arg2 = args.get(2).cloned();
                     let (types, name): (Option<Vec<&str>>, String) = match arg2.as_deref() {
                         None | Some("all") | Some("") => (None, DEFAULT_DEVICE.into()),
-                        Some(csv) if !csv.parse::<u64>().is_ok() => (
+                        Some(csv) if csv.parse::<u64>().is_err() => (
                             Some(
                                 csv.split(',')
                                     .map(str::trim)
@@ -686,8 +689,108 @@ async fn main() {
                     )
                     .await
                 }
+                "shutdown" => {
+                    // 单向终局命令：CLI 侧强制显式确认（reboot 可 60s 内恢复故自动 confirm，shutdown 不可比）
+                    if !args.iter().skip(2).any(|a| a.as_str() == "--confirm") {
+                        eprintln!(
+                            "ERROR: device.shutdown 是单向终局操作（断电后无法远程开机，需长按机身电源键），必须显式带 --confirm"
+                        );
+                        eprintln!("用法: dyj_cli device shutdown --confirm [设备名]");
+                        std::process::exit(2);
+                    }
+                    let name = args
+                        .iter()
+                        .skip(2)
+                        .find(|a| a.as_str() != "--confirm")
+                        .map(|s| s.as_str())
+                        .unwrap_or(DEFAULT_DEVICE);
+                    eprintln!(
+                        "!! device.shutdown：设备将真关机断电、BLE 断连属预期；下次需长按机身电源键开机"
+                    );
+                    with_device(
+                        name,
+                        |device| async move { device.device_shutdown(true).await },
+                    )
+                    .await
+                }
                 other => {
-                    eprintln!("未知 device 子命令: {other}（time/reboot）");
+                    eprintln!("未知 device 子命令: {other}（time/reboot/shutdown）");
+                    std::process::exit(2);
+                }
+            }
+        }
+        "power" => {
+            let sub = args.get(1).map(|s| s.as_str()).unwrap_or("status");
+            match sub {
+                "status" => {
+                    let name = args.get(2).map(|s| s.as_str()).unwrap_or(DEFAULT_DEVICE);
+                    with_device(name, |device| async move { device.power_status().await }).await
+                }
+                "mode" => {
+                    let mode_raw = args.get(2).cloned().unwrap_or_default();
+                    let mode = match mode_raw.parse::<reai_dyj_sdk::PowerMode>() {
+                        Ok(m) => m,
+                        Err(e) => {
+                            eprintln!("ERROR: {e}");
+                            eprintln!(
+                                "用法: dyj_cli power mode <normal|low_power_record|low_power_standby> [--segment-min N] [--session HEX] [设备名]"
+                            );
+                            std::process::exit(2);
+                        }
+                    };
+                    let mut segment_min: Option<u64> = None;
+                    let mut session: Option<String> = None;
+                    let mut name: Option<String> = None;
+                    let mut i = 3;
+                    while i < args.len() {
+                        let arg = args[i].as_str();
+                        if let Some(val) = arg.strip_prefix("--segment-min=") {
+                            segment_min = Some(val.parse().unwrap_or_else(|_| {
+                                eprintln!("ERROR: --segment-min 需要正整数，收到 '{val}'");
+                                std::process::exit(2);
+                            }));
+                        } else if arg == "--segment-min" {
+                            let val = args.get(i + 1).unwrap_or_else(|| {
+                                eprintln!("ERROR: --segment-min 缺少参数");
+                                std::process::exit(2);
+                            });
+                            segment_min = Some(val.parse().unwrap_or_else(|_| {
+                                eprintln!("ERROR: --segment-min 需要正整数，收到 '{val}'");
+                                std::process::exit(2);
+                            }));
+                            i += 1;
+                        } else if let Some(val) = arg.strip_prefix("--session=") {
+                            session = Some(val.to_string());
+                        } else if arg == "--session" {
+                            let val = args.get(i + 1).unwrap_or_else(|| {
+                                eprintln!("ERROR: --session 缺少参数");
+                                std::process::exit(2);
+                            });
+                            session = Some(val.clone());
+                            i += 1;
+                        } else if name.is_none() {
+                            name = Some(arg.to_string());
+                        } else {
+                            eprintln!("ERROR: 多余参数 '{arg}'");
+                            std::process::exit(2);
+                        }
+                        i += 1;
+                    }
+                    let dev_name = name.unwrap_or_else(|| DEFAULT_DEVICE.into());
+                    with_device(&dev_name, move |device| async move {
+                        match mode {
+                            reai_dyj_sdk::PowerMode::LowPowerRecord => {
+                                device
+                                    .power_low_power_record(segment_min, session.as_deref())
+                                    .await
+                            }
+                            other => device.power_mode_set(other).await,
+                        }
+                    })
+                    .await
+                }
+                other => {
+                    eprintln!("未知 power 子命令: {other}（status/mode）");
                     std::process::exit(2);
                 }
             }

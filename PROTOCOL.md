@@ -208,6 +208,9 @@ file/upload/ota 域不新开错误码段：复用 1002 参数 / 1003 内部与�
 | `volume.set` | L2* | 5s | params: `{stream:"music"\|"ring"\|"system", value:int}` → `{stream, current}`（set 后回读生效值，越界 clamp；stream 非法 1002） | 🚧 已登记（2026-10-30，批 3） |
 | `device.time` | L2* | 5s | 无 params 回读 `{epoch_ms, uptime_ms}`；`{epoch_ms}` 对时 → `{epoch_ms, applied:true}`（AlarmManager.setTime，网络自动对时开启会被系统覆盖） | 🚧 已登记（2026-10-30，批 3） |
 | `device.reboot` | L3 | 5s | **全协议最危险命令**：`{confirm:true}` 必填（缺 2003）→ `{accepted:true}` 后延迟 1s 重启（响应先出 BLE）；BLE 断连属预期；REBOOT 签名权限仅平台签名 sys 包持有 | 🚧 已登记（2026-10-30，批 3） |
+| `device.shutdown` | L3 | 5s | **真关机（单向终局）**：`{confirm:true}` 必填（缺 2003）；先优雅停止录音/相机刷盘，回 `{accepted:true, mode:"power_off", wake_key:"power", wake_hint:"长按机身电源键开机"}` 后延迟 1s 调用系统关机；**BLE 断连属预期**，真关机断电后无法由手机 BLE 远程开机，客户端须持久化「已关机」状态并指引用户长按机身电源键开机；`REBOOT` 权限仅平台签名 sys 包持有（dev 包 1003） | 🚧 已登记（2026-11-25，#1） |
+| `power.status` | L1 | 5s | 电源模式与子系统功耗状态。data: `{mode:"normal"\|"low_power_record"\|"low_power_standby", supported_modes:[...], shutdown_supported:bool, wake_keys:["power","long_press_standby"], entered_at_ms, wifi_restore_pending:bool, subsystems:{wifi, ap, recording, ble_stream, audio_capture, asr, camera, sensor, location, led_suppressed}}` | 🚧 已登记（2026-11-25，#1） |
+| `power.mode.set` | L2* | 10s | 切换运行电源模式。params: `{mode:"normal"\|"low_power_record"\|"low_power_standby", segment_min?, session?}`；`low_power_record`（深度待机低功耗录音）：关 Wi-Fi/AP/LED/ASR/传感器/定位/相机/实时音频流、BLE 切低功耗广播并保持静默本地录音（复用 `segment_min`/`session`）；`low_power_standby`（低功耗待机）：仅保留低功耗 BLE 广播等待远程或长按物理键唤醒，其余全停；回 `{mode, prev_mode, changed, wake_keys, wifi_restore_pending, subsystems:{...}}`。传 `power_off`/`shutdown` 拒绝 `1002`（请走 L3 `device.shutdown`）。`*规划目标 L2` | 🚧 已登记（2026-11-25，#1） |
 | *(其余随实施登记)* | | | | |
 
 ### 9.2 事件（待实施填充）
@@ -222,6 +225,7 @@ file/upload/ota 域不新开错误码段：复用 1002 参数 / 1003 内部与�
 | `ota.progress` | OTA 进度：`{state:"downloading"\|"verifying"\|"installing"\|"failed", progress?, bytes?, total?, error?}`。installing 发出后进程将被覆盖安装杀死、新版本自拉起（hello 回新版本号即成功）；failed 后设备存活，ota.status 查原因 | ✅ 已实施并真机验证（2026-10-27） |
 | `sensor.data` | 传感器流帧（sensor.stream.start 开启）：`{values:{...同 sensor.read values 形状，仅含已交付类型}, interval_ms}`（周期性一帧合并多类型；500ms 下限节流；BLE 断连自动停流） | ✅ 已实施并真机验证（2026-10-30，批 2） |
 | `location.fix` | 新定位到达（location.stream.start 开启）：`{lat, lon, accuracy_m?, altitude_m?, speed_mps?, bearing_deg?, satellites?, ts}`（仅新 fix 才发；BLE 断连自动停流） | ✅ 已实施并真机验证（2026-10-30，批 2） |
+| `power.mode.changed` | 电源模式切换：`{prev_mode, mode, reason:"command"\|"button_wake"\|"boot"}`（命令切换或待机状态下长按物理键唤醒恢复 `normal` 时触发） | 🚧 已登记（2026-11-25，#1） |
 | *(随实施登记：battery.* 等)* | | |
 
 ### 9.3 待定项
